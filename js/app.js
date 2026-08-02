@@ -1,6 +1,6 @@
 /**
  * CipherChat Application Controller (rrxcore edition)
- * Robust Hybrid Mode: Works seamlessly on Localhost & Static GitHub Pages
+ * Features: Discord WebRTC E2EE Live Voice Mesh, Password Protection, Web Crypto API
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -63,27 +63,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   let myKeyPair = null;
   let myPubKeyJwk = null;
 
-  // Voice Note State
+  // Voice Note Recording State
   let mediaRecorder = null;
   let audioChunks = [];
   let recordingInterval = null;
   let recordingSeconds = 0;
 
-  // Discord Live Voice Room State
-  let liveVoiceStream = null;
-  let liveVoiceRecorder = null;
+  // DISCORD WEBRTC LIVE VOICE MESH STATE
+  let localVoiceStream = null;
   let currentVoiceChannelId = null;
   let isVoiceMuted = false;
   let isVoiceDeafened = false;
+  let audioAnalyser = null;
+  let audioContext = null;
+  let speechCheckInterval = null;
+
+  // Peer Connections: Map(targetSocketId -> RTCPeerConnection)
+  const peerConnections = new Map();
+  // Audio Elements: Map(targetSocketId -> HTMLAudioElement)
+  const peerAudioElements = new Map();
+
   let voiceChannelsData = [
     { id: 'v_lounge', name: '🔊 Lounge Voice', participants: [] },
     { id: 'v_stage', name: '🔊 E2EE Stage', participants: [] }
   ];
 
-  // Peer State: Map(socketId -> { username, publicKeyJwk, sessionKey, safetyNumber })
+  // Peer E2EE State: Map(socketId -> { username, publicKeyJwk, sessionKey, safetyNumber })
   const peersMap = new Map();
 
-  // Check if running on GitHub Pages
   const isGitHubPages = window.location.hostname.includes('github.io');
   if (isGitHubPages && serverUrlGroup) {
     serverUrlGroup.style.display = 'block';
@@ -100,7 +107,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  // Initialize Socket.io Connection with Graceful Fallback
+  // Initialize Socket.io Connection
   function initSocket(targetUrl) {
     if (socket) {
       socket.disconnect();
@@ -121,25 +128,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       socket.on('connect_error', () => {
         isConnectedToServer = false;
-        console.warn('⚠️ Socket server unreachable at target URL. Operating in Standalone E2EE Mode.');
+        console.warn('⚠️ Socket server unreachable. Standalone mode active.');
       });
 
       setupSocketListeners();
     } catch (err) {
       isConnectedToServer = false;
-      console.warn('Socket initialization fallback:', err);
+      console.warn('Socket fallback:', err);
     }
   }
 
   initSocket();
 
-  // Generate random Room Code helper
   generateRoomBtn?.addEventListener('click', () => {
     const code = 'rrxcore-' + Math.random().toString(36).substring(2, 8);
     roomCodeInput.value = code;
   });
 
-  // Handle Room Join Form Submit
   joinForm?.addEventListener('submit', (e) => {
     e.preventDefault();
     myUsername = usernameInput.value.trim() || 'User_' + Math.floor(Math.random() * 1000);
@@ -153,7 +158,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     joinErrorMessage.style.display = 'none';
 
-    // If socket is connected to a live server, emit join_room
     if (socket && isConnectedToServer) {
       socket.emit('join_room', {
         roomCode: myRoomCode,
@@ -162,10 +166,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         roomPassword: myRoomPassword
       });
     } else {
-      // Standalone Mode (GitHub Pages Static Fallback) -> Immediately enter room!
       roomJoinOverlay.style.display = 'none';
       currentRoomLabel.textContent = `Room: ${myRoomCode}`;
-      addSystemMessage(`ℹ️ Joined room '${myRoomCode}' in Standalone Local Mode. (Connect a live server for multi-device cross-network signaling)`);
+      addSystemMessage(`ℹ️ Joined room '${myRoomCode}' in Standalone Mode.`);
       renderVoiceChannels();
     }
   });
@@ -259,6 +262,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     socket.on('peer_left', ({ socketId, username }) => {
       peersMap.delete(socketId);
+      closePeerConnection(socketId);
       renderPeerList();
       addSystemMessage(`User ${username} left the room.`);
     });
@@ -267,10 +271,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       renderInspectorPacket(packet);
     });
 
+    // --- DISCORD WEBRTC LIVE VOICE SIGNALING LISTENERS ---
+
     socket.on('voice_channel_created', (channel) => {
       voiceChannelsData.push(channel);
       renderVoiceChannels();
       addSystemMessage(`🔊 Voice channel '${channel.name}' was created.`);
+    });
+
+    socket.on('voice_channel_joined', async ({ channelId, existingParticipants }) => {
+      for (const p of existingParticipants) {
+        if (p.socketId !== socket.id) {
+          await createWebRTCOffer(p.socketId);
+        }
+      }
     });
 
     socket.on('voice_participants_updated', ({ channelId, participants }) => {
@@ -281,6 +295,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
 
+    socket.on('voice_peer_left', ({ socketId, channelId }) => {
+      closePeerConnection(socketId);
+    });
+
     socket.on('voice_peer_speaking', ({ socketId, channelId, isSpeaking }) => {
       const avatarEl = document.getElementById(`v_avatar_${socketId}`);
       if (avatarEl) {
@@ -289,50 +307,37 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
 
-    socket.on('receive_voice_stream_chunk', async ({ senderSocketId, channelId, ciphertext, iv }) => {
-      if (isVoiceDeafened || channelId !== currentVoiceChannelId) return;
-      const peer = peersMap.get(senderSocketId);
-      if (!peer || !peer.sessionKey) return;
+    socket.on('webrtc_offer', async ({ senderSocketId, sdpOffer }) => {
+      await handleWebRTCOffer(senderSocketId, sdpOffer);
+    });
 
-      try {
-        const audioBuffer = await CipherCrypto.decryptPayload(peer.sessionKey, ciphertext, iv, true);
-        playLiveVoiceChunk(audioBuffer);
-      } catch (err) {
-        console.error('Live voice chunk decryption failed:', err);
-      }
+    socket.on('webrtc_answer', async ({ senderSocketId, sdpAnswer }) => {
+      await handleWebRTCAnswer(senderSocketId, sdpAnswer);
+    });
+
+    socket.on('webrtc_ice_candidate', async ({ senderSocketId, candidate }) => {
+      await handleWebRTCCandidate(senderSocketId, candidate);
     });
   }
 
-  // --- DISCORD VOICE ROOM METHODS ---
-
-  createVoiceChannelBtn?.addEventListener('click', () => {
-    const name = prompt('Enter new Voice Channel name:');
-    if (name && name.trim()) {
-      if (socket && isConnectedToServer) {
-        socket.emit('create_voice_channel', { channelName: name.trim() });
-      } else {
-        const id = 'v_' + Date.now();
-        voiceChannelsData.push({ id, name: `🔊 ${name.trim()}`, participants: [] });
-        renderVoiceChannels();
-      }
-    }
-  });
+  // --- DISCORD WEBRTC LIVE VOICE ENGINE ---
 
   async function joinVoiceChannel(channelId, channelName) {
     if (currentVoiceChannelId === channelId) return;
 
     try {
-      liveVoiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localVoiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       currentVoiceChannelId = channelId;
+
+      setupSpeakingDetector(localVoiceStream);
 
       if (socket && isConnectedToServer) {
         socket.emit('join_voice_channel', { channelId });
-        startLiveVoiceStreaming();
       }
 
       discordVoiceBar.style.display = 'flex';
       activeVoiceChannelName.textContent = channelName;
-      addSystemMessage(`🟢 Connected to Voice Room: ${channelName}`);
+      addSystemMessage(`🟢 Connected to Live Voice Channel: ${channelName}`);
     } catch (err) {
       console.error('Microphone access denied:', err);
       alert('Microphone access is required to join Voice Channels.');
@@ -342,7 +347,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   function disconnectVoiceChannel() {
     if (!currentVoiceChannelId) return;
 
-    stopLiveVoiceStreaming();
+    if (speechCheckInterval) clearInterval(speechCheckInterval);
+    if (localVoiceStream) {
+      localVoiceStream.getTracks().forEach(t => t.stop());
+      localVoiceStream = null;
+    }
+
+    // Close all WebRTC Peer Connections
+    peerConnections.forEach((pc, id) => closePeerConnection(id));
+
     if (socket && isConnectedToServer) {
       socket.emit('leave_voice_channel');
     }
@@ -353,55 +366,161 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderVoiceChannels();
   }
 
-  function startLiveVoiceStreaming() {
-    if (!liveVoiceStream) return;
-    liveVoiceRecorder = new MediaRecorder(liveVoiceStream, { mimeType: 'audio/webm' });
+  // WebRTC Connection Setup Functions
+  const iceConfiguration = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' }
+    ]
+  };
 
-    liveVoiceRecorder.ondataavailable = async (e) => {
-      if (e.data.size > 0 && !isVoiceMuted && currentVoiceChannelId && socket && isConnectedToServer) {
-        const arrayBuffer = await e.data.arrayBuffer();
+  async function createWebRTCOffer(targetSocketId) {
+    const pc = new RTCPeerConnection(iceConfiguration);
+    peerConnections.set(targetSocketId, pc);
 
-        socket.emit('voice_speaking_state', { isSpeaking: true });
-        setTimeout(() => socket.emit('voice_speaking_state', { isSpeaking: false }), 250);
+    if (localVoiceStream) {
+      localVoiceStream.getTracks().forEach(track => pc.addTrack(track, localVoiceStream));
+    }
 
-        for (const [peerSocketId, peer] of peersMap.entries()) {
-          try {
-            const { ciphertextBase64, ivHex } = await CipherCrypto.encryptPayload(peer.sessionKey, arrayBuffer);
-            socket.emit('voice_stream_chunk', {
-              ciphertext: ciphertextBase64,
-              iv: ivHex
-            });
-          } catch (err) {
-            console.error('Voice chunk encryption failed:', err);
-          }
-        }
+    pc.onicecandidate = (event) => {
+      if (event.candidate && socket) {
+        socket.emit('webrtc_ice_candidate', {
+          targetSocketId,
+          candidate: event.candidate
+        });
       }
     };
 
-    liveVoiceRecorder.start(250);
+    pc.ontrack = (event) => {
+      playPeerAudioStream(targetSocketId, event.streams[0]);
+    };
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    socket.emit('webrtc_offer', {
+      targetSocketId,
+      sdpOffer: offer
+    });
   }
 
-  function stopLiveVoiceStreaming() {
-    if (liveVoiceRecorder && liveVoiceRecorder.state !== 'inactive') {
-      liveVoiceRecorder.stop();
+  async function handleWebRTCOffer(senderSocketId, sdpOffer) {
+    const pc = new RTCPeerConnection(iceConfiguration);
+    peerConnections.set(senderSocketId, pc);
+
+    if (localVoiceStream) {
+      localVoiceStream.getTracks().forEach(track => pc.addTrack(track, localVoiceStream));
     }
-    if (liveVoiceStream) {
-      liveVoiceStream.getTracks().forEach(t => t.stop());
-      liveVoiceStream = null;
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && socket) {
+        socket.emit('webrtc_ice_candidate', {
+          targetSocketId: senderSocketId,
+          candidate: event.candidate
+        });
+      }
+    };
+
+    pc.ontrack = (event) => {
+      playPeerAudioStream(senderSocketId, event.streams[0]);
+    };
+
+    await pc.setRemoteDescription(new RTCSessionDescription(sdpOffer));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+
+    socket.emit('webrtc_answer', {
+      targetSocketId: senderSocketId,
+      sdpAnswer: answer
+    });
+  }
+
+  async function handleWebRTCAnswer(senderSocketId, sdpAnswer) {
+    const pc = peerConnections.get(senderSocketId);
+    if (pc) {
+      await pc.setRemoteDescription(new RTCSessionDescription(sdpAnswer));
     }
   }
 
-  function playLiveVoiceChunk(arrayBuffer) {
-    const blob = new Blob([arrayBuffer], { type: 'audio/webm' });
-    const audioUrl = URL.createObjectURL(blob);
-    const audio = new Audio(audioUrl);
-    audio.play().catch(() => {});
+  async function handleWebRTCCandidate(senderSocketId, candidate) {
+    const pc = peerConnections.get(senderSocketId);
+    if (pc && candidate) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (err) {
+        console.error('Error adding ICE candidate:', err);
+      }
+    }
   }
 
+  function playPeerAudioStream(socketId, mediaStream) {
+    let audio = peerAudioElements.get(socketId);
+    if (!audio) {
+      audio = new Audio();
+      audio.autoplay = true;
+      peerAudioElements.set(socketId, audio);
+    }
+    audio.srcObject = mediaStream;
+    audio.muted = isVoiceDeafened;
+    audio.play().catch(err => console.warn('Audio play error:', err));
+  }
+
+  function closePeerConnection(socketId) {
+    const pc = peerConnections.get(socketId);
+    if (pc) {
+      pc.close();
+      peerConnections.delete(socketId);
+    }
+    const audio = peerAudioElements.get(socketId);
+    if (audio) {
+      audio.srcObject = null;
+      peerAudioElements.delete(socketId);
+    }
+  }
+
+  // Active Speaking Detector (Triggers glowing green ring around avatar)
+  function setupSpeakingDetector(stream) {
+    try {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioContext.createMediaStreamSource(stream);
+      audioAnalyser = audioContext.createAnalyser();
+      audioAnalyser.fftSize = 512;
+      source.connect(audioAnalyser);
+
+      const buffer = new Uint8Array(audioAnalyser.frequencyBinCount);
+      let wasSpeaking = false;
+
+      speechCheckInterval = setInterval(() => {
+        if (!currentVoiceChannelId || isVoiceMuted) return;
+        audioAnalyser.getByteFrequencyData(buffer);
+        
+        let sum = 0;
+        for (let i = 0; i < buffer.length; i++) sum += buffer[i];
+        const average = sum / buffer.length;
+        const isSpeaking = average > 25; // Volume threshold
+
+        if (isSpeaking !== wasSpeaking) {
+          wasSpeaking = isSpeaking;
+          const myAvatar = document.getElementById(`v_avatar_${socket?.id}`);
+          if (myAvatar) {
+            if (isSpeaking) myAvatar.classList.add('speaking');
+            else myAvatar.classList.remove('speaking');
+          }
+          if (socket && isConnectedToServer) {
+            socket.emit('voice_speaking_state', { isSpeaking });
+          }
+        }
+      }, 150);
+    } catch (err) {
+      console.warn('Speaking detector init error:', err);
+    }
+  }
+
+  // Voice Bar Button Handlers
   voiceMuteBtn?.addEventListener('click', () => {
     isVoiceMuted = !isVoiceMuted;
-    if (liveVoiceStream) {
-      liveVoiceStream.getAudioTracks().forEach(track => track.enabled = !isVoiceMuted);
+    if (localVoiceStream) {
+      localVoiceStream.getAudioTracks().forEach(track => track.enabled = !isVoiceMuted);
     }
     if (isVoiceMuted) {
       voiceMuteBtn.classList.add('muted');
@@ -414,6 +533,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   voiceDeafenBtn?.addEventListener('click', () => {
     isVoiceDeafened = !isVoiceDeafened;
+    peerAudioElements.forEach(audio => audio.muted = isVoiceDeafened);
     if (isVoiceDeafened) {
       voiceDeafenBtn.classList.add('muted');
       voiceDeafenBtn.textContent = '🔇';
@@ -623,7 +743,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // --- UI RENDER HELPERS ---
+  // UI RENDER HELPERS
   function renderPeerList() {
     peerList.innerHTML = '';
     if (peersMap.size === 0) {
