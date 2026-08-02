@@ -6,7 +6,7 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  maxHttpBufferSize: 1e8, // 100MB buffer limit
+  maxHttpBufferSize: 1e8,
   cors: {
     origin: '*',
     methods: ['GET', 'POST']
@@ -24,7 +24,6 @@ const roomPasswords = new Map();
 // Discord Voice Channels store: roomCode -> Map(channelId -> Map(socketId -> { username, isMuted, isSpeaking }))
 const voiceChannels = new Map();
 
-// Default Voice Channels created for every room
 function ensureDefaultVoiceChannels(roomCode) {
   if (!voiceChannels.has(roomCode)) {
     voiceChannels.set(roomCode, new Map([
@@ -114,9 +113,8 @@ io.on('connection', (socket) => {
     }
   });
 
-  // --- DISCORD VOICE ROOM EVENTS ---
+  // --- DISCORD WEBRTC VOICE ROOM SIGNALING ---
 
-  // Create custom Discord Voice Channel
   socket.on('create_voice_channel', ({ channelName }) => {
     const roomCode = socket.roomCode;
     if (!roomCode || !voiceChannels.has(roomCode)) return;
@@ -133,7 +131,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Join Discord Voice Channel
   socket.on('join_voice_channel', ({ channelId }) => {
     const roomCode = socket.roomCode;
     if (!roomCode || !voiceChannels.has(roomCode)) return;
@@ -142,7 +139,6 @@ io.on('connection', (socket) => {
     const channel = channels.get(channelId);
     if (!channel) return;
 
-    // Leave any current voice channel
     leaveCurrentVoiceChannel(socket);
 
     const room = rooms.get(roomCode);
@@ -156,6 +152,13 @@ io.on('connection', (socket) => {
       isSpeaking: false
     };
 
+    // Notify new user of existing voice participants in channel so WebRTC offers can be initiated
+    const existingParticipants = Array.from(channel.participants.values());
+    socket.emit('voice_channel_joined', {
+      channelId,
+      existingParticipants
+    });
+
     channel.participants.set(socket.id, participant);
     socket.currentVoiceChannelId = channelId;
 
@@ -167,7 +170,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Leave Discord Voice Channel
   socket.on('leave_voice_channel', () => {
     leaveCurrentVoiceChannel(socket);
   });
@@ -187,10 +189,35 @@ io.on('connection', (socket) => {
         channelId,
         participants: Array.from(channel.participants.values())
       });
+      socket.to(roomCode).emit('voice_peer_left', { socketId: socket.id, channelId });
     }
   }
 
-  // Voice Speaking State (Halo indicator)
+  // Relay WebRTC Offer
+  socket.on('webrtc_offer', ({ targetSocketId, sdpOffer }) => {
+    io.to(targetSocketId).emit('webrtc_offer', {
+      senderSocketId: socket.id,
+      sdpOffer
+    });
+  });
+
+  // Relay WebRTC Answer
+  socket.on('webrtc_answer', ({ targetSocketId, sdpAnswer }) => {
+    io.to(targetSocketId).emit('webrtc_answer', {
+      senderSocketId: socket.id,
+      sdpAnswer
+    });
+  });
+
+  // Relay WebRTC ICE Candidate
+  socket.on('webrtc_ice_candidate', ({ targetSocketId, candidate }) => {
+    io.to(targetSocketId).emit('webrtc_ice_candidate', {
+      senderSocketId: socket.id,
+      candidate
+    });
+  });
+
+  // Voice Speaking State
   socket.on('voice_speaking_state', ({ isSpeaking }) => {
     const roomCode = socket.roomCode;
     const channelId = socket.currentVoiceChannelId;
@@ -209,21 +236,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Relay E2EE Live Voice Stream Chunk
-  socket.on('voice_stream_chunk', ({ ciphertext, iv }) => {
-    const roomCode = socket.roomCode;
-    const channelId = socket.currentVoiceChannelId;
-    if (!roomCode || !channelId) return;
-
-    socket.to(roomCode).emit('receive_voice_stream_chunk', {
-      senderSocketId: socket.id,
-      channelId,
-      ciphertext,
-      iv
-    });
-  });
-
-  // Relay Encrypted Payloads (Text, File, Photo, Voice Note)
+  // Encrypted Payload Relay (Text, File, Photo, Voice Note)
   socket.on('send_encrypted_payload', ({ roomCode, recipientSocketId, ciphertext, iv, salt, payloadType, fileName, fileSize, audioDuration, isImage }) => {
     const room = rooms.get(roomCode);
     const sender = room?.get(socket.id);
