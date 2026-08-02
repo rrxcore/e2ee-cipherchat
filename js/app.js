@@ -1,6 +1,6 @@
 /**
  * CipherChat Application Controller (rrxcore edition)
- * Features: Discord Voice Rooms, WebRTC P2P Voice, 10 Real-Time Voice Changer FX, Hardware Device Selectors
+ * Features: Telegram (Fast Cloud Messaging & Disk Store, Double Confirm Clear Chat, Delete For Me / Delete For Everyone, Unified 3-Dot/Right-Click Context Menu, Edit, Pin, Forward, Star, TTS, AI Assistant), WhatsApp (Stories, Disappearing Msgs), Discord (WebRTC Video 4K@60, 30Mbps Bitrate, Draggable PiP, 10 Voice FX)
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -20,6 +20,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const openInspectorBtn = document.getElementById('openInspectorBtn');
   const openSafetyBtn = document.getElementById('openSafetyBtn');
   const openVoiceSettingsBtn = document.getElementById('openVoiceSettingsBtn');
+  const openStatusBtn = document.getElementById('openStatusBtn');
+  const openDisappearingBtn = document.getElementById('openDisappearingBtn');
+  const openThemeBtn = document.getElementById('openThemeBtn');
+  const openClearChatBtn = document.getElementById('openClearChatBtn');
 
   const singleChatView = document.getElementById('singleChatView');
   const splitSimView = document.getElementById('splitSimView');
@@ -31,6 +35,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   const closeSafetyBtn = document.getElementById('closeSafetyBtn');
   const safetyMatrixContainer = document.getElementById('safetyMatrixContainer');
 
+  // Single Message Delete Modal Elements
+  const singleMsgDeleteModal = document.getElementById('singleMsgDeleteModal');
+  const closeSingleMsgDeleteBtn = document.getElementById('closeSingleMsgDeleteBtn');
+  const deleteForMeBtn = document.getElementById('deleteForMeBtn');
+  const deleteForEveryoneBtn = document.getElementById('deleteForEveryoneBtn');
+  const cancelSingleMsgDeleteBtn = document.getElementById('cancelSingleMsgDeleteBtn');
+  let pendingDeleteTarget = null;
+
+  // Clear Chat Modal Elements
+  const clearChatModal = document.getElementById('clearChatModal');
+  const closeClearChatBtn = document.getElementById('closeClearChatBtn');
+  const clearSingleUserBtn = document.getElementById('clearSingleUserBtn');
+  const clearBothUsersBtn = document.getElementById('clearBothUsersBtn');
+  const cancelClearChatBtn = document.getElementById('cancelClearChatBtn');
+
+  // Sidebar Resizing Elements
+  const chatSidebar = document.getElementById('chatSidebar');
+  const sidebarResizer = document.getElementById('sidebarResizer');
+  const toggleSidebarWidthBtn = document.getElementById('toggleSidebarWidthBtn');
+
   // Single Chat & Discord Elements
   const currentRoomLabel = document.getElementById('currentRoomLabel');
   const peerList = document.getElementById('peerList');
@@ -39,7 +63,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   const messageInput = document.getElementById('messageInput');
   const fileInput = document.getElementById('fileInput');
 
-  // Discord Voice Room Elements
+  // Telegram Pinning & Reply Preview Elements
+  const pinnedMessageBar = document.getElementById('pinnedMessageBar');
+  const pinnedSender = document.getElementById('pinnedSender');
+  const pinnedText = document.getElementById('pinnedText');
+  const unpinBtn = document.getElementById('unpinBtn');
+
+  const replyPreviewBar = document.getElementById('replyPreviewBar');
+  const replyTargetSender = document.getElementById('replyTargetSender');
+  const replyTargetText = document.getElementById('replyTargetText');
+  const cancelReplyBtn = document.getElementById('cancelReplyBtn');
+  let activeReplyQuote = null;
+
+  // Channel Elements
+  const textChannelList = document.getElementById('textChannelList');
+  const createTextChannelBtn = document.getElementById('createTextChannelBtn');
+  const activeChannelHeader = document.getElementById('activeChannelHeader');
+  const createTextModal = document.getElementById('createTextModal');
+  const closeCreateTextBtn = document.getElementById('closeCreateTextBtn');
+  const createTextForm = document.getElementById('createTextForm');
+  const newTextChannelNameInput = document.getElementById('newTextChannelNameInput');
+
+  // Discord Voice & Video Elements
   const voiceChannelList = document.getElementById('voiceChannelList');
   const createVoiceChannelBtn = document.getElementById('createVoiceChannelBtn');
   const discordVoiceBar = document.getElementById('discordVoiceBar');
@@ -47,17 +92,48 @@ document.addEventListener('DOMContentLoaded', async () => {
   const activeVoiceFXLabel = document.getElementById('activeVoiceFXLabel');
   const voiceMuteBtn = document.getElementById('voiceMuteBtn');
   const voiceDeafenBtn = document.getElementById('voiceDeafenBtn');
+  const voiceCameraBtn = document.getElementById('voiceCameraBtn');
+  const voiceScreenShareBtn = document.getElementById('voiceScreenShareBtn');
   const voiceDisconnectBtn = document.getElementById('voiceDisconnectBtn');
   const openVoiceFXBtn = document.getElementById('openVoiceFXBtn');
 
-  // Voice Settings Modal Elements
+  // Video Grid, Quality, Bitrate & View Mode Elements
+  const videoGridWrapper = document.getElementById('videoGridWrapper');
+  const videoGridContainer = document.getElementById('videoGridContainer');
+  const viewModePipBtn = document.getElementById('viewModePipBtn');
+  const viewModeCompactBtn = document.getElementById('viewModeCompactBtn');
+  const viewModeTheaterBtn = document.getElementById('viewModeTheaterBtn');
+  const videoQualitySelect = document.getElementById('videoQualitySelect');
+  const videoBitrateSelect = document.getElementById('videoBitrateSelect');
+  const videoStageModal = document.getElementById('videoStageModal');
+  const closeVideoStageBtn = document.getElementById('closeVideoStageBtn');
+  const stageVideoElement = document.getElementById('stageVideoElement');
+  const videoStageTitle = document.getElementById('videoStageTitle');
+
+  // Feature Modals
+  const statusModal = document.getElementById('statusModal');
+  const closeStatusBtn = document.getElementById('closeStatusBtn');
+  const postStatusForm = document.getElementById('postStatusForm');
+  const statusTextInput = document.getElementById('statusTextInput');
+  const statusStoryListContainer = document.getElementById('statusStoryListContainer');
+
+  const disappearingModal = document.getElementById('disappearingModal');
+  const closeDisappearingBtn = document.getElementById('closeDisappearingBtn');
+  const timerOptionsGrid = document.getElementById('timerOptionsGrid');
+  const activeTimerLabel = document.getElementById('activeTimerLabel');
+  const disappearingBadge = document.getElementById('disappearingBadge');
+  const badgeTimerText = document.getElementById('badgeTimerText');
+
+  const themeModal = document.getElementById('themeModal');
+  const closeThemeBtn = document.getElementById('closeThemeBtn');
+  const themeGridContainer = document.getElementById('themeGridContainer');
+
   const voiceSettingsModal = document.getElementById('voiceSettingsModal');
   const closeVoiceSettingsBtn = document.getElementById('closeVoiceSettingsBtn');
   const micSelect = document.getElementById('micSelect');
   const speakerSelect = document.getElementById('speakerSelect');
   const testAudioChimeBtn = document.getElementById('testAudioChimeBtn');
 
-  // Voice Changer FX Modal Elements
   const voiceFXModal = document.getElementById('voiceFXModal');
   const closeVoiceFXBtn = document.getElementById('closeVoiceFXBtn');
   const fxGridContainer = document.getElementById('fxGridContainer');
@@ -66,13 +142,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const customFxFreqInput = document.getElementById('customFxFreqInput');
   const addCustomFxBtn = document.getElementById('addCustomFxBtn');
 
-  // Create Voice Room Modal Elements
   const createVoiceModal = document.getElementById('createVoiceModal');
   const closeCreateVoiceBtn = document.getElementById('closeCreateVoiceBtn');
   const createVoiceForm = document.getElementById('createVoiceForm');
   const newVoiceChannelNameInput = document.getElementById('newVoiceChannelNameInput');
 
-  // Voice Note Recording Elements
   const micBtn = document.getElementById('micBtn');
   const voiceRecordingPill = document.getElementById('voiceRecordingPill');
   const recordingTimer = document.getElementById('recordingTimer');
@@ -87,6 +161,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   let myRoomPassword = '';
   let myKeyPair = null;
   let myPubKeyJwk = null;
+
+  // Feature State
+  let disappearingTimerSeconds = 0; // 0 = Off
+  let activeTextChannel = 'general-chat';
+  let isCameraActive = false;
+  let isScreenShareActive = false;
+  let localVideoStream = null;
+  let localScreenStream = null;
+
+  // 4K@60 Quality & Custom Bitrate Profiles
+  const videoQualityProfiles = {
+    '4k': { width: 3840, height: 2160, fps: 60 },
+    '2k': { width: 2560, height: 1440, fps: 60 },
+    '1080p': { width: 1920, height: 1080, fps: 60 },
+    '720p': { width: 1280, height: 720, fps: 30 }
+  };
+  let selectedQualityKey = '1080p';
+  let selectedBitrateBps = 16000000; // 16Mbps default for screen sharing & video
 
   // Voice Note Recording State
   let mediaRecorder = null;
@@ -117,6 +209,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const peerConnections = new Map();
   const peerAudioElements = new Map();
+  const activeStreamsMap = new Map();
+  const statusStoriesList = [];
 
   let voiceChannelsData = [
     { id: 'v_lounge', name: '🔊 Lounge Voice', participants: [] },
@@ -124,9 +218,358 @@ document.addEventListener('DOMContentLoaded', async () => {
   ];
 
   const peersMap = new Map();
+  const renderedMsgIdsSet = new Set();
 
-  const isGitHubPages = window.location.hostname.includes('github.io');
-  if (isGitHubPages && serverUrlGroup) {
+  // Close context menus on document click
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.msg-options-btn') && !e.target.closest('.msg-context-menu')) {
+      document.querySelectorAll('.msg-context-menu').forEach(menu => menu.classList.remove('active'));
+    }
+  });
+
+  // --- SINGLE MESSAGE DELETE MODAL HANDLERS ---
+  closeSingleMsgDeleteBtn?.addEventListener('click', () => {
+    singleMsgDeleteModal.classList.remove('active');
+    pendingDeleteTarget = null;
+  });
+
+  cancelSingleMsgDeleteBtn?.addEventListener('click', () => {
+    singleMsgDeleteModal.classList.remove('active');
+    pendingDeleteTarget = null;
+  });
+
+  deleteForMeBtn?.addEventListener('click', () => {
+    if (pendingDeleteTarget && pendingDeleteTarget.container) {
+      pendingDeleteTarget.container.remove();
+      removeFromLocalTelegramCloud(myRoomCode, myUsername, pendingDeleteTarget.msgId);
+      addSystemMessage('🗑️ Message deleted for you.');
+    }
+    singleMsgDeleteModal.classList.remove('active');
+    pendingDeleteTarget = null;
+  });
+
+  deleteForEveryoneBtn?.addEventListener('click', () => {
+    if (pendingDeleteTarget && pendingDeleteTarget.container) {
+      pendingDeleteTarget.container.remove();
+      removeFromLocalTelegramCloud(myRoomCode, myUsername, pendingDeleteTarget.msgId);
+      if (socket && isConnectedToServer) {
+        socket.emit('delete_single_message', { roomCode: myRoomCode, messageId: pendingDeleteTarget.msgId });
+      }
+      addSystemMessage('🗑️ Message deleted for everyone.');
+    }
+    singleMsgDeleteModal.classList.remove('active');
+    pendingDeleteTarget = null;
+  });
+
+  // --- DOUBLE CONFIRMATION CLEAR CHAT HISTORY ENGINE ---
+  openClearChatBtn?.addEventListener('click', () => {
+    clearChatModal.classList.add('active');
+  });
+
+  closeClearChatBtn?.addEventListener('click', () => {
+    clearChatModal.classList.remove('active');
+  });
+
+  cancelClearChatBtn?.addEventListener('click', () => {
+    clearChatModal.classList.remove('active');
+  });
+
+  clearSingleUserBtn?.addEventListener('click', () => {
+    if (confirm(`Are you sure you want to clear chat history for your account '${myUsername}' only?`)) {
+      localStorage.removeItem(`cipherchat_telegram_cloud_${myRoomCode}_${myUsername}`);
+      renderedMsgIdsSet.clear();
+      messagesArea.innerHTML = '';
+      addSystemMessage(`🧹 Local chat history cleared for your account '${myUsername}' only.`);
+      clearChatModal.classList.remove('active');
+    }
+  });
+
+  clearBothUsersBtn?.addEventListener('click', () => {
+    if (confirm(`⚠️ DOUBLE CONFIRMATION DANGER:\n\nThis will permanently erase all Telegram Cloud chat history for EVERYONE in room '${myRoomCode}'.\n\nDo you want to proceed?`)) {
+      if (socket && isConnectedToServer) {
+        socket.emit('clear_room_history', { roomCode: myRoomCode });
+      }
+      localStorage.removeItem(`cipherchat_telegram_cloud_${myRoomCode}_${myUsername}`);
+      renderedMsgIdsSet.clear();
+      messagesArea.innerHTML = '';
+      addSystemMessage(`🧹 Room chat history cleared for both users.`);
+      clearChatModal.classList.remove('active');
+    }
+  });
+
+  // --- TELEGRAM PINNING & QUOTED REPLIES ENGINE ---
+  function pinMessage(sender, text) {
+    pinnedSender.textContent = `${sender}:`;
+    pinnedText.textContent = text;
+    pinnedMessageBar.style.display = 'flex';
+    addSystemMessage(`📌 Pinned message by ${sender}.`);
+  }
+
+  unpinBtn?.addEventListener('click', () => {
+    pinnedMessageBar.style.display = 'none';
+  });
+
+  cancelReplyBtn?.addEventListener('click', () => {
+    activeReplyQuote = null;
+    replyPreviewBar.style.display = 'none';
+  });
+
+  function setReplyTarget(sender, text) {
+    activeReplyQuote = { sender, text };
+    replyTargetSender.textContent = `Replying to @${sender}`;
+    replyTargetText.textContent = text;
+    replyPreviewBar.style.display = 'flex';
+    messageInput.focus();
+  }
+
+  function speakText(text) {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      window.speechSynthesis.speak(utterance);
+      addSystemMessage('🔊 Speaking message aloud...');
+    } else {
+      alert('Web Speech API is not supported in this browser.');
+    }
+  }
+
+  function editMessage(container, msgId, oldText) {
+    const newText = prompt('Edit your message:', oldText);
+    if (newText !== null && newText.trim() !== '') {
+      const bubble = container.querySelector('.msg-bubble');
+      if (bubble) {
+        const timeEl = bubble.querySelector('.msg-time');
+        const timeHtml = timeEl ? timeEl.outerHTML : '';
+        bubble.innerHTML = `${escapeHtml(newText.trim())} <span style="font-size: 0.68rem; color: var(--ios-orange); font-weight: 700;">(edited)</span> ${timeHtml}`;
+        addSystemMessage('✏️ Message edited.');
+      }
+    }
+  }
+
+  function attachContextMenuEvents(container, msgId, sender, text) {
+    const optionsBtn = container.querySelector('.msg-options-btn');
+    const menu = container.querySelector('.msg-context-menu');
+    if (!optionsBtn || !menu) return;
+
+    optionsBtn.onclick = (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.msg-context-menu').forEach(m => m !== menu && m.classList.remove('active'));
+      menu.classList.toggle('active');
+    };
+
+    container.oncontextmenu = (e) => {
+      e.preventDefault();
+      document.querySelectorAll('.msg-context-menu').forEach(m => m !== menu && m.classList.remove('active'));
+      menu.classList.toggle('active');
+    };
+
+    // Emoji reaction buttons
+    menu.querySelectorAll('.top-reaction-btn').forEach(btn => {
+      btn.onclick = () => {
+        const emoji = btn.dataset.emoji;
+        menu.classList.remove('active');
+        sendReaction(msgId, emoji);
+      };
+    });
+
+    const replyItem = menu.querySelector('.ctx-reply');
+    const editItem = menu.querySelector('.ctx-edit');
+    const pinItem = menu.querySelector('.ctx-pin');
+    const forwardItem = menu.querySelector('.ctx-forward');
+    const starItem = menu.querySelector('.ctx-star');
+    const speakItem = menu.querySelector('.ctx-speak');
+    const aiItem = menu.querySelector('.ctx-ai');
+    const copyItem = menu.querySelector('.ctx-copy');
+    const copyIdItem = menu.querySelector('.ctx-copy-id');
+    const deleteItem = menu.querySelector('.ctx-delete');
+
+    replyItem?.addEventListener('click', () => {
+      menu.classList.remove('active');
+      setReplyTarget(sender, text);
+    });
+
+    editItem?.addEventListener('click', () => {
+      menu.classList.remove('active');
+      editMessage(container, msgId, text);
+    });
+
+    pinItem?.addEventListener('click', () => {
+      menu.classList.remove('active');
+      pinMessage(sender, text);
+    });
+
+    forwardItem?.addEventListener('click', () => {
+      menu.classList.remove('active');
+      messageInput.value = `↪ Forwarded from @${sender}: "${text}"`;
+      messageInput.focus();
+    });
+
+    starItem?.addEventListener('click', () => {
+      menu.classList.remove('active');
+      addReactionToMessage(msgId, '⭐');
+      addSystemMessage(`⭐ Message starred.`);
+    });
+
+    speakItem?.addEventListener('click', () => {
+      menu.classList.remove('active');
+      speakText(text);
+    });
+
+    aiItem?.addEventListener('click', () => {
+      menu.classList.remove('active');
+      renderIncomingMessage('Cipher AI 🤖', `Based on "${text}": CipherChat E2EE ensures your communication is fully private & end-to-end encrypted!`, new Date().toLocaleTimeString(), 0, 'ai_' + Date.now());
+    });
+
+    copyItem?.addEventListener('click', () => {
+      menu.classList.remove('active');
+      navigator.clipboard.writeText(text);
+      addSystemMessage('📋 Text copied to clipboard!');
+    });
+
+    copyIdItem?.addEventListener('click', () => {
+      menu.classList.remove('active');
+      navigator.clipboard.writeText(msgId);
+      addSystemMessage(`🆔 Copied Message ID: ${msgId}`);
+    });
+
+    deleteItem?.addEventListener('click', () => {
+      menu.classList.remove('active');
+      pendingDeleteTarget = { container, msgId };
+      singleMsgDeleteModal.classList.add('active');
+    });
+  }
+
+  // --- TELEGRAM FAST CLOUD MESSAGING ACCURATE PERSISTENCE ENGINE ---
+  function saveToLocalTelegramCloud(roomCode, username, item) {
+    try {
+      const key = `cipherchat_telegram_cloud_${roomCode}_${username}`;
+      const existingStr = localStorage.getItem(key);
+      let items = existingStr ? JSON.parse(existingStr) : [];
+      if (!items.some(x => x.id === item.id)) {
+        items.push(item);
+        if (items.length > 300) items.shift();
+        localStorage.setItem(key, JSON.stringify(items));
+      }
+    } catch (e) {
+      console.warn('Local cloud storage write error:', e);
+    }
+  }
+
+  function removeFromLocalTelegramCloud(roomCode, username, msgId) {
+    try {
+      const key = `cipherchat_telegram_cloud_${roomCode}_${username}`;
+      const existingStr = localStorage.getItem(key);
+      if (existingStr) {
+        let items = JSON.parse(existingStr);
+        items = items.filter(x => x.id !== msgId);
+        localStorage.setItem(key, JSON.stringify(items));
+      }
+    } catch (e) {}
+  }
+
+  function getLocalTelegramCloud(roomCode, username) {
+    try {
+      const key = `cipherchat_telegram_cloud_${roomCode}_${username}`;
+      const existingStr = localStorage.getItem(key);
+      return existingStr ? JSON.parse(existingStr) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // --- INTERACTIVE SIDEBAR RESIZING & SHRINK/EXPAND ENGINE ---
+  let isResizingSidebar = false;
+
+  if (sidebarResizer && chatSidebar) {
+    sidebarResizer.addEventListener('mousedown', (e) => {
+      isResizingSidebar = true;
+      sidebarResizer.classList.add('resizing');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isResizingSidebar) return;
+      const appContainerLeft = document.querySelector('.app-container').getBoundingClientRect().left;
+      let newWidth = e.clientX - appContainerLeft;
+      if (newWidth < 200) newWidth = 200;
+      if (newWidth > 460) newWidth = 460;
+
+      chatSidebar.style.width = `${newWidth}px`;
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (isResizingSidebar) {
+        isResizingSidebar = false;
+        sidebarResizer.classList.remove('resizing');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+    });
+  }
+
+  toggleSidebarWidthBtn?.addEventListener('click', () => {
+    const currentWidth = chatSidebar.offsetWidth;
+    if (currentWidth < 300) {
+      chatSidebar.style.width = '350px';
+      addSystemMessage('↔️ Sidebar expanded to 350px.');
+    } else {
+      chatSidebar.style.width = '220px';
+      addSystemMessage('↔️ Sidebar shrunk to 220px.');
+    }
+  });
+
+  // --- INTERACTIVE DRAGGABLE PIP CARD ENGINE ---
+  let isDraggingPip = false;
+  let pipOffsetLeft = 0;
+  let pipOffsetTop = 0;
+
+  const pipHeader = videoGridWrapper ? videoGridWrapper.querySelector('.video-grid-header') : null;
+
+  if (pipHeader && videoGridWrapper) {
+    pipHeader.addEventListener('mousedown', (e) => {
+      if (!videoGridWrapper.classList.contains('mode-pip')) return;
+      if (e.target.tagName === 'BUTTON' || e.target.tagName === 'SELECT' || e.target.tagName === 'LABEL') return;
+
+      isDraggingPip = true;
+      const rect = videoGridWrapper.getBoundingClientRect();
+      pipOffsetLeft = e.clientX - rect.left;
+      pipOffsetTop = e.clientY - rect.top;
+
+      document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDraggingPip || !videoGridWrapper.classList.contains('mode-pip')) return;
+      e.preventDefault();
+
+      let newLeft = e.clientX - pipOffsetLeft;
+      let newTop = e.clientY - pipOffsetTop;
+
+      const maxLeft = window.innerWidth - videoGridWrapper.offsetWidth - 10;
+      const maxTop = window.innerHeight - videoGridWrapper.offsetHeight - 10;
+
+      if (newLeft < 10) newLeft = 10;
+      if (newLeft > maxLeft) newLeft = maxLeft;
+      if (newTop < 10) newTop = 10;
+      if (newTop > maxTop) newTop = maxTop;
+
+      videoGridWrapper.style.left = `${newLeft}px`;
+      videoGridWrapper.style.top = `${newTop}px`;
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (isDraggingPip) {
+        isDraggingPip = false;
+        document.body.style.userSelect = '';
+      }
+    });
+  }
+
+  // Ensure Signaling Server URL group is ALWAYS visible on Join Card
+  if (serverUrlGroup) {
     serverUrlGroup.style.display = 'block';
   }
 
@@ -148,6 +591,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     try {
+      const isGitHubPages = window.location.hostname.includes('github.io');
       const connectTarget = targetUrl || (isGitHubPages ? 'http://localhost:3000' : window.location.origin);
       socket = io(connectTarget, {
         timeout: 4000,
@@ -203,9 +647,59 @@ document.addEventListener('DOMContentLoaded', async () => {
       roomJoinOverlay.style.display = 'none';
       currentRoomLabel.textContent = `Room: ${myRoomCode}`;
       addSystemMessage(`ℹ️ Joined room '${myRoomCode}' in Standalone Mode.`);
+      restoreTelegramCloudHistory([]);
       renderVoiceChannels();
     }
   });
+
+  // --- TELEGRAM FAST CLOUD MESSAGING RECOVERY ENGINE ---
+  async function restoreTelegramCloudHistory(serverCloudMessages) {
+    const localCloudMessages = getLocalTelegramCloud(myRoomCode, myUsername);
+    const combinedMap = new Map();
+
+    localCloudMessages.forEach(item => combinedMap.set(item.id, item));
+    (serverCloudMessages || []).forEach(item => combinedMap.set(item.id, item));
+
+    const sortedHistory = Array.from(combinedMap.values()).sort((a, b) => (a.id > b.id ? 1 : -1));
+
+    let restoredCount = 0;
+
+    for (const msg of sortedHistory) {
+      if (renderedMsgIdsSet.has(msg.id)) continue;
+
+      if (msg.senderUsername === myUsername) {
+        if (msg.payloadType === 'file') {
+          renderOutgoingFileMessage(msg.senderUsername, msg.fileName, msg.plaintextFallback || '#', msg.isImage, msg.timerSeconds, msg.id);
+        } else if (msg.payloadType === 'voice') {
+          renderOutgoingVoiceMessage(msg.senderUsername, msg.plaintextFallback || '#', msg.audioDuration, msg.timerSeconds, msg.id);
+        } else {
+          renderOutgoingMessage(msg.senderUsername, msg.plaintextFallback || 'Restored E2EE Cloud Message', msg.id, msg.timerSeconds);
+        }
+        restoredCount++;
+      } else {
+        let decodedText = msg.plaintextFallback || '🔒 Encrypted Cloud Message';
+        const peer = peersMap.get(msg.senderSocketId);
+        if (peer && peer.sessionKey && msg.ciphertext && msg.iv) {
+          try {
+            decodedText = await CipherCrypto.decryptPayload(peer.sessionKey, msg.ciphertext, msg.iv);
+          } catch (e) {}
+        }
+
+        if (msg.payloadType === 'file') {
+          renderIncomingFileMessage(msg.senderUsername, msg.fileName, msg.plaintextFallback || '#', msg.isImage, msg.timestamp, msg.timerSeconds, msg.id);
+        } else if (msg.payloadType === 'voice') {
+          renderIncomingVoiceMessage(msg.senderUsername, msg.plaintextFallback || '#', msg.audioDuration, msg.timestamp, msg.timerSeconds, msg.id);
+        } else {
+          renderIncomingMessage(msg.senderUsername, decodedText, msg.timestamp, msg.timerSeconds, msg.id);
+        }
+        restoredCount++;
+      }
+    }
+
+    if (restoredCount > 0) {
+      addSystemMessage(`☁️ Telegram Fast Cloud Messaging: Restored ${restoredCount} messages for '${myUsername}' in '${myRoomCode}'!`);
+    }
+  }
 
   function setupSocketListeners() {
     if (!socket) return;
@@ -215,7 +709,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       joinErrorMessage.style.display = 'block';
     });
 
-    socket.on('room_joined', async ({ roomCode, mySession, peers, recentPackets, isPasswordProtected, voiceChannels }) => {
+    socket.on('room_joined', async ({ roomCode, mySession, peers, recentPackets, isPasswordProtected, voiceChannels, cloudHistory }) => {
       roomJoinOverlay.style.display = 'none';
       currentRoomLabel.textContent = `Room: ${myRoomCode}`;
 
@@ -237,6 +731,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         voiceChannelsData = voiceChannels;
         renderVoiceChannels();
       }
+
+      await restoreTelegramCloudHistory(cloudHistory);
+    });
+
+    socket.on('room_history_cleared', ({ roomCode }) => {
+      localStorage.removeItem(`cipherchat_telegram_cloud_${myRoomCode}_${myUsername}`);
+      renderedMsgIdsSet.clear();
+      messagesArea.innerHTML = '';
+      addSystemMessage(`🧹 Room chat history was permanently cleared for both users by a peer.`);
+    });
+
+    socket.on('message_deleted_for_everyone', ({ messageId }) => {
+      const el = document.getElementById(messageId);
+      if (el) el.remove();
+      removeFromLocalTelegramCloud(myRoomCode, myUsername, messageId);
+      addSystemMessage(`🗑️ A message was deleted for everyone by peer.`);
     });
 
     socket.on('peer_joined', async (peer) => {
@@ -261,7 +771,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!peer || !peer.sessionKey) return;
 
       try {
-        if (payload.payloadType === 'file') {
+        if (payload.payloadType === 'reaction') {
+          const reactionEmoji = await CipherCrypto.decryptPayload(peer.sessionKey, payload.ciphertext, payload.iv);
+          addReactionToMessage(payload.messageId, reactionEmoji);
+        } else if (payload.payloadType === 'story') {
+          const storyText = await CipherCrypto.decryptPayload(peer.sessionKey, payload.ciphertext, payload.iv);
+          addStatusStory(payload.senderUsername, storyText);
+        } else if (payload.payloadType === 'file') {
           const decryptedBuffer = await CipherCrypto.decryptPayload(
             peer.sessionKey,
             payload.ciphertext,
@@ -270,7 +786,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           );
           const blob = new Blob([decryptedBuffer]);
           const fileUrl = URL.createObjectURL(blob);
-          renderIncomingFileMessage(payload.senderUsername, payload.fileName, fileUrl, payload.isImage, payload.timestamp);
+          renderIncomingFileMessage(payload.senderUsername, payload.fileName, fileUrl, payload.isImage, payload.timestamp, payload.timerSeconds, payload.id);
         } else if (payload.payloadType === 'voice') {
           const decryptedBuffer = await CipherCrypto.decryptPayload(
             peer.sessionKey,
@@ -280,14 +796,14 @@ document.addEventListener('DOMContentLoaded', async () => {
           );
           const audioBlob = new Blob([decryptedBuffer], { type: 'audio/webm' });
           const audioUrl = URL.createObjectURL(audioBlob);
-          renderIncomingVoiceMessage(payload.senderUsername, audioUrl, payload.audioDuration, payload.timestamp);
+          renderIncomingVoiceMessage(payload.senderUsername, audioUrl, payload.audioDuration, payload.timestamp, payload.timerSeconds, payload.id);
         } else {
           const plaintext = await CipherCrypto.decryptPayload(
             peer.sessionKey,
             payload.ciphertext,
             payload.iv
           );
-          renderIncomingMessage(payload.senderUsername, plaintext, payload.timestamp);
+          renderIncomingMessage(payload.senderUsername, plaintext, payload.timestamp, payload.timerSeconds, payload.id);
         }
       } catch (err) {
         console.error('Decryption failed:', err);
@@ -304,8 +820,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     socket.on('inspector_packet', (packet) => {
       renderInspectorPacket(packet);
     });
-
-    // --- DISCORD WEBRTC LIVE VOICE SIGNALING LISTENERS ---
 
     socket.on('voice_channel_created', (channel) => {
       voiceChannelsData.push(channel);
@@ -352,6 +866,137 @@ document.addEventListener('DOMContentLoaded', async () => {
     socket.on('webrtc_ice_candidate', async ({ senderSocketId, candidate }) => {
       await handleWebRTCCandidate(senderSocketId, candidate);
     });
+  }
+
+  // --- SHRINK & EXPAND VIDEO VIEW MODES (DRAGGABLE PiP, COMPACT, THEATER, STAGE) ---
+
+  function setVideoViewMode(mode) {
+    videoGridWrapper.classList.remove('mode-pip');
+    videoGridContainer.classList.remove('mode-compact', 'mode-theater');
+
+    viewModePipBtn.classList.remove('active-mode');
+    viewModeCompactBtn.classList.remove('active-mode');
+    viewModeTheaterBtn.classList.remove('active-mode');
+
+    if (mode === 'pip') {
+      videoGridWrapper.classList.add('mode-pip');
+      viewModePipBtn.classList.add('active-mode');
+
+      videoGridWrapper.style.left = `${window.innerWidth - 380}px`;
+      videoGridWrapper.style.top = `${window.innerHeight - 290}px`;
+
+      addSystemMessage('📱 Video stream shrunk into Draggable Picture-in-Picture card. Drag the top bar to move anywhere!');
+    } else {
+      videoGridWrapper.style.left = '';
+      videoGridWrapper.style.top = '';
+
+      if (mode === 'theater') {
+        videoGridContainer.classList.add('mode-theater');
+        viewModeTheaterBtn.classList.add('active-mode');
+        addSystemMessage('📺 Video stream expanded into Theater View (480px).');
+      } else {
+        videoGridContainer.classList.add('mode-compact');
+        viewModeCompactBtn.classList.add('active-mode');
+        addSystemMessage('🎬 Video stream set to Compact Topbar View.');
+      }
+    }
+  }
+
+  viewModePipBtn?.addEventListener('click', () => setVideoViewMode('pip'));
+  viewModeCompactBtn?.addEventListener('click', () => setVideoViewMode('compact'));
+  viewModeTheaterBtn?.addEventListener('click', () => setVideoViewMode('theater'));
+
+  videoQualitySelect?.addEventListener('change', async () => {
+    selectedQualityKey = videoQualitySelect.value;
+    const profile = videoQualityProfiles[selectedQualityKey];
+    addSystemMessage(`✨ Video & Screen Share quality set to: ${selectedQualityKey.toUpperCase()} (${profile.width}x${profile.height} @ ${profile.fps}fps)`);
+
+    if (isCameraActive) {
+      await startCameraStream();
+    }
+    if (isScreenShareActive) {
+      await startScreenShareStream();
+    }
+  });
+
+  videoBitrateSelect?.addEventListener('change', async () => {
+    selectedBitrateBps = parseInt(videoBitrateSelect.value, 10);
+    const mbpsStr = (selectedBitrateBps / 1000000).toFixed(0);
+    addSystemMessage(`⚡ Stream encoder bitrate set to: ${mbpsStr} Mbps`);
+
+    peerConnections.forEach(async (pc) => {
+      try {
+        const senders = pc.getSenders();
+        const s = senders.find(x => x.track && x.track.kind === 'video');
+        if (s && s.setParameters) {
+          const params = s.getParameters();
+          if (!params.encodings) params.encodings = [{}];
+          params.encodings[0].maxBitrate = selectedBitrateBps;
+          await s.setParameters(params);
+        }
+      } catch (e) {
+        console.warn('Dynamic bitrate tuning error:', e);
+      }
+    });
+  });
+
+  function openVideoStage(label, stream) {
+    if (!stream) return;
+    videoStageTitle.textContent = `📹 ${label}`;
+    stageVideoElement.srcObject = stream;
+    stageVideoElement.play().catch(e => console.warn('Stage video play error:', e));
+    videoStageModal.classList.add('active');
+  }
+
+  closeVideoStageBtn?.addEventListener('click', () => {
+    videoStageModal.classList.remove('active');
+    stageVideoElement.srcObject = null;
+  });
+
+  function addVideoCard(id, label, stream) {
+    activeStreamsMap.set(id, stream);
+    let card = document.getElementById(`vcard_${id}`);
+
+    if (!card) {
+      card = document.createElement('div');
+      card.className = 'video-card';
+      card.id = `vcard_${id}`;
+      card.innerHTML = `
+        <video class="video-stream-element" id="vstream_${id}" autoplay playsinline muted></video>
+        <div class="video-card-overlay">
+          <div class="video-card-title">${escapeHtml(label)}</div>
+          <div class="video-card-actions">
+            <button type="button" class="card-stage-btn" id="stage_btn_${id}">⛶ Stage View</button>
+          </div>
+        </div>
+      `;
+      videoGridContainer.appendChild(card);
+
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.card-stage-btn') || e.target.classList.contains('video-card')) {
+          const s = activeStreamsMap.get(id);
+          openVideoStage(label, s);
+        }
+      });
+    }
+
+    const videoEl = document.getElementById(`vstream_${id}`);
+    if (videoEl) {
+      videoEl.srcObject = stream;
+      videoEl.play().catch(e => console.warn('Video element play error:', e));
+    }
+
+    videoGridWrapper.style.display = 'flex';
+  }
+
+  function removeVideoCard(id) {
+    activeStreamsMap.delete(id);
+    const card = document.getElementById(`vcard_${id}`);
+    if (card) card.remove();
+    if (videoGridContainer.children.length === 0) {
+      videoGridWrapper.style.display = 'none';
+      videoGridWrapper.classList.remove('mode-pip');
+    }
   }
 
   // --- DISCORD SOUND EFFECTS SYNTHESIS ENGINE ---
@@ -457,7 +1102,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       localRawStream = newStream;
       applyVoiceChangerFX(activeVoiceFX);
 
-      // Replace audio track across all active WebRTC peer connections
       const newTrack = processedVoiceStream.getAudioTracks()[0];
       peerConnections.forEach((pc) => {
         const sender = pc.getSenders().find(s => s.track && s.track.kind === 'audio');
@@ -472,7 +1116,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     selectedSpeakerId = speakerSelect.value;
     peerAudioElements.forEach((audio) => {
       if (typeof audio.setSinkId === 'function' && selectedSpeakerId) {
-        audio.setSinkId(selectedSpeakerId).catch(e => console.warn('setSinkId error:', e));
+        audio.setSinkId(selectedSpeakerId).catch(() => {});
       }
     });
     addSystemMessage(`🔊 Audio output device switched.`);
@@ -487,7 +1131,336 @@ document.addEventListener('DOMContentLoaded', async () => {
     voiceSettingsModal.classList.remove('active');
   });
 
+  // --- WEBRTC CAMERA & SCREEN SHARE CONTROLS WITH 30Mbps BITRATE TUNING ---
+
+  async function startCameraStream() {
+    const profile = videoQualityProfiles[selectedQualityKey];
+    const mbpsStr = (selectedBitrateBps / 1000000).toFixed(0);
+    try {
+      if (localVideoStream) {
+        localVideoStream.getTracks().forEach(t => t.stop());
+      }
+
+      localVideoStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: profile.width, max: 3840 },
+          height: { ideal: profile.height, max: 2160 },
+          frameRate: { ideal: profile.fps, max: 60 }
+        }
+      });
+
+      voiceCameraBtn.classList.add('active');
+      addVideoCard('my_cam', `${myUsername} (Camera ${selectedQualityKey.toUpperCase()} @ ${mbpsStr}Mbps)`, localVideoStream);
+
+      const videoTrack = localVideoStream.getVideoTracks()[0];
+      peerConnections.forEach(async (pc) => {
+        const videoSender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+        if (videoSender) {
+          await videoSender.replaceTrack(videoTrack);
+        } else {
+          pc.addTrack(videoTrack, localVideoStream);
+        }
+        try {
+          const senders = pc.getSenders();
+          const s = senders.find(x => x.track && x.track.kind === 'video');
+          if (s && s.setParameters) {
+            const params = s.getParameters();
+            if (!params.encodings) params.encodings = [{}];
+            params.encodings[0].maxBitrate = selectedBitrateBps;
+            await s.setParameters(params);
+          }
+        } catch (e) {
+          console.warn('Bitrate tuning fallback:', e);
+        }
+      });
+
+      addSystemMessage(`📹 WebRTC Camera active at ${selectedQualityKey.toUpperCase()} (${profile.width}x${profile.height} @ ${profile.fps}FPS, ${mbpsStr}Mbps).`);
+    } catch (err) {
+      alert(`Camera stream at ${selectedQualityKey.toUpperCase()} unavailable. Falling back to default HD.`);
+    }
+  }
+
+  async function startScreenShareStream() {
+    const profile = videoQualityProfiles[selectedQualityKey];
+    const mbpsStr = (selectedBitrateBps / 1000000).toFixed(0);
+    try {
+      if (localScreenStream) {
+        localScreenStream.getTracks().forEach(t => t.stop());
+      }
+
+      localScreenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          displaySurface: 'monitor',
+          width: { ideal: profile.width, max: 3840 },
+          height: { ideal: profile.height, max: 2160 },
+          frameRate: { ideal: profile.fps, max: 60 }
+        },
+        audio: true
+      });
+
+      voiceScreenShareBtn.classList.add('active');
+      addVideoCard('my_screen', `${myUsername} (Screen Share ${selectedQualityKey.toUpperCase()} @ ${mbpsStr}Mbps)`, localScreenStream);
+
+      const screenTrack = localScreenStream.getVideoTracks()[0];
+      peerConnections.forEach(async (pc) => {
+        const videoSender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+        if (videoSender) {
+          await videoSender.replaceTrack(screenTrack);
+        } else {
+          pc.addTrack(screenTrack, localScreenStream);
+        }
+        try {
+          const senders = pc.getSenders();
+          const s = senders.find(x => x.track && x.track.kind === 'video');
+          if (s && s.setParameters) {
+            const params = s.getParameters();
+            if (!params.encodings) params.encodings = [{}];
+            params.encodings[0].maxBitrate = selectedBitrateBps;
+            await s.setParameters(params);
+          }
+        } catch (e) {
+          console.warn('Bitrate tuning fallback:', e);
+        }
+      });
+
+      addSystemMessage(`🖥️ WebRTC Screen Share active at ${selectedQualityKey.toUpperCase()} (${profile.width}x${profile.height} @ ${profile.fps}FPS, ${mbpsStr}Mbps).`);
+
+      screenTrack.onended = () => {
+        voiceScreenShareBtn.classList.remove('active');
+        removeVideoCard('my_screen');
+        isScreenShareActive = false;
+      };
+    } catch (err) {
+      console.warn('Screen share canceled:', err);
+    }
+  }
+
+  voiceCameraBtn?.addEventListener('click', async () => {
+    isCameraActive = !isCameraActive;
+    if (isCameraActive) {
+      await startCameraStream();
+    } else {
+      voiceCameraBtn.classList.remove('active');
+      removeVideoCard('my_cam');
+      if (localVideoStream) {
+        localVideoStream.getTracks().forEach(t => t.stop());
+        localVideoStream = null;
+      }
+      addSystemMessage(`📹 WebRTC Camera Video stopped.`);
+    }
+  });
+
+  voiceScreenShareBtn?.addEventListener('click', async () => {
+    isScreenShareActive = !isScreenShareActive;
+    if (isScreenShareActive) {
+      await startScreenShareStream();
+    } else {
+      voiceScreenShareBtn.classList.remove('active');
+      removeVideoCard('my_screen');
+      if (localScreenStream) {
+        localScreenStream.getTracks().forEach(t => t.stop());
+        localScreenStream = null;
+      }
+      addSystemMessage(`🖥️ WebRTC Screen Share stopped.`);
+    }
+  });
+
+  // --- DISAPPEARING MESSAGES TIMER (TELEGRAM & WHATSAPP) ---
+
+  openDisappearingBtn?.addEventListener('click', () => {
+    disappearingModal.classList.add('active');
+  });
+
+  closeDisappearingBtn?.addEventListener('click', () => {
+    disappearingModal.classList.remove('active');
+  });
+
+  timerOptionsGrid?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.timer-option-btn');
+    if (!btn) return;
+
+    document.querySelectorAll('.timer-option-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    disappearingTimerSeconds = parseInt(btn.dataset.seconds, 10);
+    const label = btn.textContent;
+    activeTimerLabel.textContent = `Timer: ${label}`;
+    badgeTimerText.textContent = label;
+
+    if (disappearingTimerSeconds > 0) {
+      disappearingBadge.style.display = 'flex';
+      addSystemMessage(`⏱️ Disappearing Messages enabled (${label}).`);
+    } else {
+      disappearingBadge.style.display = 'none';
+      addSystemMessage(`⏱️ Disappearing Messages turned OFF.`);
+    }
+
+    disappearingModal.classList.remove('active');
+  });
+
+  function scheduleMessageSelfDestruct(element, seconds) {
+    if (!seconds || seconds <= 0) return;
+    setTimeout(() => {
+      element.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+      element.style.opacity = '0';
+      element.style.transform = 'scale(0.9)';
+      setTimeout(() => element.remove(), 500);
+    }, seconds * 1000);
+  }
+
+  // --- WHATSAPP 24-HOUR STATUS STORIES ---
+
+  openStatusBtn?.addEventListener('click', () => {
+    renderStatusStories();
+    statusModal.classList.add('active');
+  });
+
+  closeStatusBtn?.addEventListener('click', () => {
+    statusModal.classList.remove('active');
+  });
+
+  postStatusForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = statusTextInput.value.trim();
+    if (!text) return;
+
+    statusTextInput.value = '';
+    addStatusStory(myUsername, text);
+
+    for (const [peerSocketId, peer] of peersMap.entries()) {
+      try {
+        const { ciphertextBase64, ivHex } = await CipherCrypto.encryptPayload(peer.sessionKey, text);
+        socket.emit('send_encrypted_payload', {
+          roomCode: myRoomCode,
+          recipientSocketId: peerSocketId,
+          ciphertext: ciphertextBase64,
+          iv: ivHex,
+          payloadType: 'story'
+        });
+      } catch (err) {
+        console.error('Story E2EE failed:', err);
+      }
+    }
+
+    renderStatusStories();
+    addSystemMessage(`📸 Encrypted Status Story posted!`);
+  });
+
+  function addStatusStory(username, text) {
+    statusStoriesList.unshift({
+      id: 'story_' + Date.now(),
+      username,
+      text,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      expiresAt: Date.now() + 24 * 60 * 60 * 1000
+    });
+  }
+
+  function renderStatusStories() {
+    statusStoryListContainer.innerHTML = '';
+    const validStories = statusStoriesList.filter(s => s.expiresAt > Date.now());
+
+    if (validStories.length === 0) {
+      statusStoryListContainer.innerHTML = `<div style="padding: 12px; color: var(--text-muted); font-size: 0.82rem; text-align: center;">No active stories. Post a 24-hour update above!</div>`;
+      return;
+    }
+
+    validStories.forEach(s => {
+      const card = document.createElement('div');
+      card.className = 'status-story-card';
+      card.innerHTML = `
+        <div class="status-story-avatar">${s.username[0].toUpperCase()}</div>
+        <div style="flex: 1;">
+          <div style="font-weight: 700; font-size: 0.88rem; color: #fff;">${escapeHtml(s.username)} <span style="font-size: 0.7rem; color: var(--text-dim); font-weight: 400;">• ${s.timestamp}</span></div>
+          <div style="font-size: 0.84rem; color: var(--text-muted); margin-top: 2px;">${escapeHtml(s.text)}</div>
+        </div>
+        <div style="font-size: 0.68rem; color: var(--ios-green); font-weight: 700;">🔒 24h E2EE</div>
+      `;
+      statusStoryListContainer.appendChild(card);
+    });
+  }
+
+  // --- THEME SELECTOR ---
+
+  openThemeBtn?.addEventListener('click', () => {
+    themeModal.classList.add('active');
+  });
+
+  closeThemeBtn?.addEventListener('click', () => {
+    themeModal.classList.remove('active');
+  });
+
+  themeGridContainer?.addEventListener('click', (e) => {
+    const card = e.target.closest('.theme-card');
+    if (!card) return;
+
+    document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+
+    const theme = card.dataset.theme;
+    document.body.setAttribute('data-theme', theme);
+    addSystemMessage(`🎨 UI Theme switched to '${theme.toUpperCase()}'.`);
+    themeModal.classList.remove('active');
+  });
+
+  // --- CUSTOM TEXT CHANNELS ---
+
+  createTextChannelBtn?.addEventListener('click', () => {
+    createTextModal.classList.add('active');
+  });
+
+  closeCreateTextBtn?.addEventListener('click', () => {
+    createTextModal.classList.remove('active');
+  });
+
+  createTextForm?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = newTextChannelNameInput.value.trim().toLowerCase().replace(/\s+/g, '-');
+    if (!name) return;
+
+    const item = document.createElement('div');
+    item.className = 'channel-item';
+    item.dataset.channel = name;
+    item.innerHTML = `<span># ${escapeHtml(name)}</span>`;
+
+    textChannelList.appendChild(item);
+    newTextChannelNameInput.value = '';
+    createTextModal.classList.remove('active');
+    addSystemMessage(`# Text channel '#${name}' created.`);
+  });
+
+  textChannelList?.addEventListener('click', (e) => {
+    const item = e.target.closest('.channel-item');
+    if (!item) return;
+
+    document.querySelectorAll('#textChannelList .channel-item').forEach(i => i.classList.remove('active'));
+    item.classList.add('active');
+
+    activeTextChannel = item.dataset.channel;
+    activeChannelHeader.textContent = `# ${activeTextChannel}`;
+  });
+
+  // --- EMOJI REACTIONS ENGINE ---
+
+  function addReactionToMessage(msgId, emoji) {
+    const msgEl = document.getElementById(msgId);
+    if (!msgEl) return;
+
+    let reactionsDiv = msgEl.querySelector('.msg-reactions');
+    if (!reactionsDiv) {
+      reactionsDiv = document.createElement('div');
+      reactionsDiv.className = 'msg-reactions';
+      msgEl.appendChild(reactionsDiv);
+    }
+
+    const badge = document.createElement('span');
+    badge.className = 'reaction-badge';
+    badge.textContent = `${emoji} 1`;
+    reactionsDiv.appendChild(badge);
+  }
+
   // --- 10 REAL-TIME WEB AUDIO DSP VOICE CHANGER ENGINE ---
+
   function applyVoiceChangerFX(fxType) {
     if (!localRawStream) return;
     activeVoiceFX = fxType;
@@ -497,7 +1470,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         fxAudioContext = new (window.AudioContext || window.webkitAudioContext)();
       }
 
-      // Close previous node setup
       if (fxSourceNode) fxSourceNode.disconnect();
       if (fxFilterNode) fxFilterNode.disconnect();
       if (fxDelayNode) fxDelayNode.disconnect();
@@ -508,7 +1480,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (fxType === 'normal') {
         fxSourceNode.connect(fxDestinationNode);
       } else if (fxType === 'robot') {
-        // Ring Modulator (50Hz sine LFO)
         const osc = fxAudioContext.createOscillator();
         const gain = fxAudioContext.createGain();
         osc.frequency.value = 50;
@@ -519,7 +1490,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         osc.connect(gain.gain);
         gain.connect(fxDestinationNode);
       } else if (fxType === 'alien') {
-        // Formant Filter + Flanger
         fxFilterNode = fxAudioContext.createBiquadFilter();
         fxFilterNode.type = 'peaking';
         fxFilterNode.frequency.value = 1800;
@@ -529,7 +1499,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         fxSourceNode.connect(fxFilterNode);
         fxFilterNode.connect(fxDestinationNode);
       } else if (fxType === 'monster') {
-        // Deep Lowpass + Bass Boost
         fxFilterNode = fxAudioContext.createBiquadFilter();
         fxFilterNode.type = 'lowpass';
         fxFilterNode.frequency.value = 350;
@@ -537,7 +1506,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         fxSourceNode.connect(fxFilterNode);
         fxFilterNode.connect(fxDestinationNode);
       } else if (fxType === 'walkie') {
-        // Bandpass 300Hz - 3000Hz
         fxFilterNode = fxAudioContext.createBiquadFilter();
         fxFilterNode.type = 'bandpass';
         fxFilterNode.frequency.value = 1200;
@@ -546,7 +1514,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         fxSourceNode.connect(fxFilterNode);
         fxFilterNode.connect(fxDestinationNode);
       } else if (fxType === 'chipmunk') {
-        // Highpass Treble Boost
         fxFilterNode = fxAudioContext.createBiquadFilter();
         fxFilterNode.type = 'highpass';
         fxFilterNode.frequency.value = 1400;
@@ -554,7 +1521,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         fxSourceNode.connect(fxFilterNode);
         fxFilterNode.connect(fxDestinationNode);
       } else if (fxType === 'cave') {
-        // Delay Reverb Loop
         fxDelayNode = fxAudioContext.createDelay();
         fxDelayNode.delayTime.value = 0.25;
 
@@ -567,7 +1533,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         fxGainNode.connect(fxDelayNode);
         fxGainNode.connect(fxDestinationNode);
       } else if (fxType === 'telephone') {
-        // Telephone 400Hz - 1200Hz
         fxFilterNode = fxAudioContext.createBiquadFilter();
         fxFilterNode.type = 'bandpass';
         fxFilterNode.frequency.value = 800;
@@ -576,7 +1541,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         fxSourceNode.connect(fxFilterNode);
         fxFilterNode.connect(fxDestinationNode);
       } else if (fxType === 'cyber') {
-        // Harmonic Overdrive + Highshelf
         fxFilterNode = fxAudioContext.createBiquadFilter();
         fxFilterNode.type = 'highshelf';
         fxFilterNode.frequency.value = 2200;
@@ -585,7 +1549,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         fxSourceNode.connect(fxFilterNode);
         fxFilterNode.connect(fxDestinationNode);
       } else if (fxType === 'underwater') {
-        // Heavy Lowpass Muffle (220Hz cutoff)
         fxFilterNode = fxAudioContext.createBiquadFilter();
         fxFilterNode.type = 'lowpass';
         fxFilterNode.frequency.value = 220;
@@ -602,7 +1565,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Voice FX Cards Click Handler
   fxGridContainer?.addEventListener('click', (e) => {
     const card = e.target.closest('.fx-card');
     if (!card) return;
@@ -614,7 +1576,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     applyVoiceChangerFX(fx);
     addSystemMessage(`🎭 Voice Changer FX updated to '${fx.toUpperCase()}'.`);
 
-    // Replace WebRTC audio track with new DSP FX stream
     if (processedVoiceStream) {
       const newTrack = processedVoiceStream.getAudioTracks()[0];
       peerConnections.forEach((pc) => {
@@ -626,7 +1587,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Add Custom Voice Effect Handler
   addCustomFxBtn?.addEventListener('click', () => {
     const name = customFxNameInput.value.trim();
     const filterType = customFxFilterSelect.value;
@@ -659,7 +1619,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     voiceFXModal.classList.remove('active');
   });
 
-  // --- CREATE NEW VOICE ROOM MODAL ---
   createVoiceChannelBtn?.addEventListener('click', () => {
     createVoiceModal.classList.add('active');
   });
@@ -764,7 +1723,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     pc.ontrack = (event) => {
-      playPeerAudioStream(targetSocketId, event.streams[0]);
+      if (event.track.kind === 'video') {
+        addVideoCard(targetSocketId, `Peer Video Stream`, event.streams[0]);
+      } else {
+        playPeerAudioStream(targetSocketId, event.streams[0]);
+      }
     };
 
     const offer = await pc.createOffer();
@@ -795,7 +1758,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     pc.ontrack = (event) => {
-      playPeerAudioStream(senderSocketId, event.streams[0]);
+      if (event.track.kind === 'video') {
+        addVideoCard(senderSocketId, `Peer Video Stream`, event.streams[0]);
+      } else {
+        playPeerAudioStream(senderSocketId, event.streams[0]);
+      }
     };
 
     await pc.setRemoteDescription(new RTCSessionDescription(sdpOffer));
@@ -852,6 +1819,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       audio.srcObject = null;
       peerAudioElements.delete(socketId);
     }
+    removeVideoCard(socketId);
   }
 
   function setupSpeakingDetector(stream) {
@@ -979,14 +1947,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Text Send
+  // Text Send with Quoted Reply Support
   chatForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const text = messageInput.value.trim();
+    let text = messageInput.value.trim();
     if (!text) return;
 
+    if (activeReplyQuote) {
+      text = `> Replying to @${activeReplyQuote.sender}: "${activeReplyQuote.text.substring(0, 40)}..."\n${text}`;
+      activeReplyQuote = null;
+      replyPreviewBar.style.display = 'none';
+    }
+
     messageInput.value = '';
-    renderOutgoingMessage(myUsername, text);
+    const msgId = 'msg_' + Date.now();
+    renderOutgoingMessage(myUsername, text, msgId, disappearingTimerSeconds);
 
     if (socket && isConnectedToServer) {
       for (const [peerSocketId, peer] of peersMap.entries()) {
@@ -997,7 +1972,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             recipientSocketId: peerSocketId,
             ciphertext: ciphertextBase64,
             iv: ivHex,
-            payloadType: 'text'
+            payloadType: 'text',
+            timerSeconds: disappearingTimerSeconds,
+            messageId: msgId,
+            plaintextFallback: text
           });
         } catch (err) {
           console.error('Text encryption error:', err);
@@ -1020,6 +1998,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     addSystemMessage(`Encrypting ${isImage ? 'image' : 'file'} '${file.name}' (${(file.size / 1024).toFixed(1)} KB)...`);
     const arrayBuffer = await file.arrayBuffer();
 
+    const localUrl = URL.createObjectURL(file);
+    const msgId = 'file_' + Date.now();
+
     if (socket && isConnectedToServer) {
       for (const [peerSocketId, peer] of peersMap.entries()) {
         try {
@@ -1032,7 +2013,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             payloadType: 'file',
             fileName: file.name,
             fileSize: file.size,
-            isImage: isImage
+            isImage: isImage,
+            timerSeconds: disappearingTimerSeconds,
+            messageId: msgId,
+            plaintextFallback: localUrl
           });
         } catch (err) {
           console.error('File E2EE failed:', err);
@@ -1040,8 +2024,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
 
-    const localUrl = URL.createObjectURL(file);
-    renderOutgoingFileMessage(myUsername, file.name, localUrl, isImage);
+    renderOutgoingFileMessage(myUsername, file.name, localUrl, isImage, disappearingTimerSeconds, msgId);
     fileInput.value = '';
   });
 
@@ -1086,6 +2069,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       const arrayBuffer = await audioBlob.arrayBuffer();
       const durationStr = `${Math.floor(recordingSeconds / 60)}:${String(recordingSeconds % 60).padStart(2, '0')}`;
 
+      const localAudioUrl = URL.createObjectURL(audioBlob);
+      const msgId = 'voice_' + Date.now();
+
       if (socket && isConnectedToServer) {
         for (const [peerSocketId, peer] of peersMap.entries()) {
           try {
@@ -1096,7 +2082,10 @@ document.addEventListener('DOMContentLoaded', async () => {
               ciphertext: ciphertextBase64,
               iv: ivHex,
               payloadType: 'voice',
-              audioDuration: durationStr
+              audioDuration: durationStr,
+              timerSeconds: disappearingTimerSeconds,
+              messageId: msgId,
+              plaintextFallback: localAudioUrl
             });
           } catch (err) {
             console.error('Voice note encryption failed:', err);
@@ -1104,8 +2093,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }
 
-      const localAudioUrl = URL.createObjectURL(audioBlob);
-      renderOutgoingVoiceMessage(myUsername, localAudioUrl, durationStr);
+      renderOutgoingVoiceMessage(myUsername, localAudioUrl, durationStr, disappearingTimerSeconds, msgId);
     };
     mediaRecorder.stop();
   });
@@ -1117,7 +2105,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // UI RENDER HELPERS
+  // UI RENDER HELPERS WITH ACCURATE PERSISTENT CLOUD SAVES
   function renderPeerList() {
     peerList.innerHTML = '';
     if (peersMap.size === 0) {
@@ -1150,75 +2138,259 @@ document.addEventListener('DOMContentLoaded', async () => {
     messagesArea.scrollTop = messagesArea.scrollHeight;
   }
 
-  function renderOutgoingMessage(sender, text) {
+  function buildContextMenuHtml(timeStr) {
+    return `
+      <div class="top-reaction-bar">
+        <button type="button" class="top-reaction-btn" data-emoji="❤️" title="Heart">❤️</button>
+        <button type="button" class="top-reaction-btn" data-emoji="👍" title="Thumbs Up">👍</button>
+        <button type="button" class="top-reaction-btn" data-emoji="👎" title="Thumbs Down">👎</button>
+        <button type="button" class="top-reaction-btn" data-emoji="🔥" title="Fire">🔥</button>
+        <button type="button" class="top-reaction-btn" data-emoji="🥳" title="Party">🥳</button>
+        <button type="button" class="top-reaction-btn" data-emoji="👏" title="Clap">👏</button>
+        <button type="button" class="top-reaction-btn" data-emoji="🚀" title="Rocket">🚀</button>
+        <button type="button" class="top-reaction-btn" data-emoji="💯" title="100">💯</button>
+      </div>
+      <div class="context-info-header">
+        <span>✓ ${timeStr} • E2EE</span>
+      </div>
+      <button class="context-menu-item ctx-reply">↩ Reply</button>
+      <button class="context-menu-item ctx-edit">✏ Edit Message</button>
+      <button class="context-menu-item ctx-pin">📌 Pin Message</button>
+      <button class="context-menu-item ctx-forward">↪ Forward</button>
+      <button class="context-menu-item ctx-star">⭐ Star Message</button>
+      <button class="context-menu-item ctx-speak">🔊 Speak Message (TTS)</button>
+      <button class="context-menu-item ctx-ai">🤖 Ask Cipher AI</button>
+      <div class="context-menu-divider"></div>
+      <button class="context-menu-item ctx-copy">📋 Copy Text</button>
+      <button class="context-menu-item ctx-copy-id">🆔 Copy Message ID</button>
+      <div class="context-menu-divider"></div>
+      <button class="context-menu-item ctx-delete danger-item">🗑️ Delete Message...</button>
+    `;
+  }
+
+  function renderOutgoingMessage(sender, text, msgId, timerSecs) {
+    const id = msgId || 'msg_' + Date.now();
+    renderedMsgIdsSet.add(id);
+
+    if (!timerSecs || timerSecs === 0) {
+      saveToLocalTelegramCloud(myRoomCode, myUsername, {
+        id,
+        senderUsername: sender,
+        plaintextFallback: text,
+        payloadType: 'text',
+        timerSeconds: 0,
+        timestamp: new Date().toLocaleTimeString()
+      });
+    }
+
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const msgDiv = document.createElement('div');
     msgDiv.className = 'msg-bubble-container outgoing';
+    msgDiv.id = id;
+
+    const timerBadgeHtml = timerSecs > 0 ? `<span class="timer-badge">⏱️ ${timerSecs}s</span>` : '';
+
     msgDiv.innerHTML = `
+      <button type="button" class="msg-options-btn" title="Message Options (⋮)">⋮</button>
+      <div class="msg-context-menu">
+        ${buildContextMenuHtml(time)}
+      </div>
       <div class="msg-bubble">
         ${escapeHtml(text)}
-        <div class="msg-time">${time} <span class="e2ee-tag">🔒 Encrypted</span></div>
+        <div class="msg-time">${time} ${timerBadgeHtml} <span class="e2ee-tag">🔒 Encrypted</span></div>
+      </div>
+      <div class="msg-reactions">
+        <span class="reaction-badge" onclick="sendReaction('${id}', '❤️')">❤️</span>
+        <span class="reaction-badge" onclick="sendReaction('${id}', '👍')">👍</span>
+        <span class="reaction-badge" onclick="sendReaction('${id}', '🔥')">🔥</span>
       </div>
     `;
     messagesArea.appendChild(msgDiv);
     messagesArea.scrollTop = messagesArea.scrollHeight;
+    attachContextMenuEvents(msgDiv, id, sender, text);
+
+    if (timerSecs > 0) scheduleMessageSelfDestruct(msgDiv, timerSecs);
   }
 
-  function renderIncomingMessage(sender, text, timestamp) {
+  function renderIncomingMessage(sender, text, timestamp, timerSecs, msgId) {
+    const id = msgId || 'in_' + Date.now();
+    renderedMsgIdsSet.add(id);
+
+    if (!timerSecs || timerSecs === 0) {
+      saveToLocalTelegramCloud(myRoomCode, myUsername, {
+        id,
+        senderUsername: sender,
+        plaintextFallback: text,
+        payloadType: 'text',
+        timerSeconds: 0,
+        timestamp: timestamp || new Date().toLocaleTimeString()
+      });
+    }
+
+    const timeStr = timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const msgDiv = document.createElement('div');
     msgDiv.className = 'msg-bubble-container incoming';
+    msgDiv.id = id;
+
+    const timerBadgeHtml = timerSecs > 0 ? `<span class="timer-badge">⏱️ ${timerSecs}s</span>` : '';
+
     msgDiv.innerHTML = `
+      <button type="button" class="msg-options-btn" title="Message Options (⋮)">⋮</button>
+      <div class="msg-context-menu">
+        ${buildContextMenuHtml(timeStr)}
+      </div>
       <div class="msg-sender">${escapeHtml(sender)}</div>
       <div class="msg-bubble">
         ${escapeHtml(text)}
-        <div class="msg-time">${timestamp || ''} <span class="e2ee-tag">🔒 Decrypted</span></div>
+        <div class="msg-time">${timeStr} ${timerBadgeHtml} <span class="e2ee-tag">🔒 Decrypted</span></div>
+      </div>
+      <div class="msg-reactions">
+        <span class="reaction-badge" onclick="sendReaction('${id}', '❤️')">❤️</span>
+        <span class="reaction-badge" onclick="sendReaction('${id}', '👍')">👍</span>
+        <span class="reaction-badge" onclick="sendReaction('${id}', '🔥')">🔥</span>
       </div>
     `;
     messagesArea.appendChild(msgDiv);
     messagesArea.scrollTop = messagesArea.scrollHeight;
+    attachContextMenuEvents(msgDiv, id, sender, text);
+
+    if (timerSecs > 0) scheduleMessageSelfDestruct(msgDiv, timerSecs);
   }
 
-  function renderOutgoingFileMessage(sender, fileName, fileUrl, isImage) {
+  window.sendReaction = async function(msgId, emoji) {
+    addReactionToMessage(msgId, emoji);
+    for (const [peerSocketId, peer] of peersMap.entries()) {
+      try {
+        const { ciphertextBase64, ivHex } = await CipherCrypto.encryptPayload(peer.sessionKey, emoji);
+        socket.emit('send_encrypted_payload', {
+          roomCode: myRoomCode,
+          recipientSocketId: peerSocketId,
+          ciphertext: ciphertextBase64,
+          iv: ivHex,
+          payloadType: 'reaction',
+          messageId: msgId
+        });
+      } catch (err) {
+        console.error('Reaction E2EE failed:', err);
+      }
+    }
+  };
+
+  function renderOutgoingFileMessage(sender, fileName, fileUrl, isImage, timerSecs, msgId) {
+    const id = msgId || 'file_' + Date.now();
+    renderedMsgIdsSet.add(id);
+
+    if (!timerSecs || timerSecs === 0) {
+      saveToLocalTelegramCloud(myRoomCode, myUsername, {
+        id,
+        senderUsername: sender,
+        fileName,
+        plaintextFallback: fileUrl,
+        isImage,
+        payloadType: 'file',
+        timerSeconds: 0,
+        timestamp: new Date().toLocaleTimeString()
+      });
+    }
+
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const msgDiv = document.createElement('div');
     msgDiv.className = 'msg-bubble-container outgoing';
+    msgDiv.id = id;
     const imageHtml = isImage ? `<img src="${fileUrl}" alt="Decrypted Image" class="e2ee-img-preview">` : '';
+    const timerBadgeHtml = timerSecs > 0 ? `<span class="timer-badge">⏱️ ${timerSecs}s</span>` : '';
 
     msgDiv.innerHTML = `
+      <button type="button" class="msg-options-btn" title="Message Options (⋮)">⋮</button>
+      <div class="msg-context-menu">
+        ${buildContextMenuHtml(timeStr)}
+      </div>
       <div class="msg-bubble">
         ${imageHtml}
         📎 <strong>${escapeHtml(fileName)}</strong><br>
         <a href="${fileUrl}" download="${escapeHtml(fileName)}" style="color: #fff; font-size: 0.8rem; text-decoration: underline;">Download File</a>
-        <div class="msg-time">🔒 Encrypted File</div>
+        <div class="msg-time">${timerBadgeHtml} 🔒 Encrypted File</div>
       </div>
     `;
     messagesArea.appendChild(msgDiv);
     messagesArea.scrollTop = messagesArea.scrollHeight;
+    attachContextMenuEvents(msgDiv, id, sender, `File: ${fileName}`);
+
+    if (timerSecs > 0) scheduleMessageSelfDestruct(msgDiv, timerSecs);
   }
 
-  function renderIncomingFileMessage(sender, fileName, fileUrl, isImage, timestamp) {
+  function renderIncomingFileMessage(sender, fileName, fileUrl, isImage, timestamp, timerSecs, msgId) {
+    const id = msgId || 'file_in_' + Date.now();
+    renderedMsgIdsSet.add(id);
+
+    if (!timerSecs || timerSecs === 0) {
+      saveToLocalTelegramCloud(myRoomCode, myUsername, {
+        id,
+        senderUsername: sender,
+        fileName,
+        plaintextFallback: fileUrl,
+        isImage,
+        payloadType: 'file',
+        timerSeconds: 0,
+        timestamp: timestamp || new Date().toLocaleTimeString()
+      });
+    }
+
+    const timeStr = timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const msgDiv = document.createElement('div');
     msgDiv.className = 'msg-bubble-container incoming';
+    msgDiv.id = id;
     const imageHtml = isImage ? `<img src="${fileUrl}" alt="Decrypted Image" class="e2ee-img-preview">` : '';
+    const timerBadgeHtml = timerSecs > 0 ? `<span class="timer-badge">⏱️ ${timerSecs}s</span>` : '';
 
     msgDiv.innerHTML = `
+      <button type="button" class="msg-options-btn" title="Message Options (⋮)">⋮</button>
+      <div class="msg-context-menu">
+        ${buildContextMenuHtml(timeStr)}
+      </div>
       <div class="msg-sender">${escapeHtml(sender)}</div>
       <div class="msg-bubble">
         ${imageHtml}
         📎 <strong>${escapeHtml(fileName)}</strong><br>
         <a href="${fileUrl}" download="${escapeHtml(fileName)}" style="color: var(--ios-cyan); font-size: 0.8rem; text-decoration: underline;">Download Decrypted File</a>
-        <div class="msg-time">${timestamp || ''} <span class="e2ee-tag">🔒 Decrypted File</span></div>
+        <div class="msg-time">${timeStr} ${timerBadgeHtml} <span class="e2ee-tag">🔒 Decrypted File</span></div>
       </div>
     `;
     messagesArea.appendChild(msgDiv);
     messagesArea.scrollTop = messagesArea.scrollHeight;
+    attachContextMenuEvents(msgDiv, id, sender, `File: ${fileName}`);
+
+    if (timerSecs > 0) scheduleMessageSelfDestruct(msgDiv, timerSecs);
   }
 
-  function renderOutgoingVoiceMessage(sender, audioUrl, duration) {
+  function renderOutgoingVoiceMessage(sender, audioUrl, duration, timerSecs, msgId) {
+    const id = msgId || 'vnote_' + Date.now();
+    renderedMsgIdsSet.add(id);
+
+    if (!timerSecs || timerSecs === 0) {
+      saveToLocalTelegramCloud(myRoomCode, myUsername, {
+        id,
+        senderUsername: sender,
+        audioDuration: duration,
+        plaintextFallback: audioUrl,
+        payloadType: 'voice',
+        timerSeconds: 0,
+        timestamp: new Date().toLocaleTimeString()
+      });
+    }
+
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const msgDiv = document.createElement('div');
     msgDiv.className = 'msg-bubble-container outgoing';
+    msgDiv.id = id;
     const uniqueId = 'aud_' + Math.random().toString(36).substr(2, 6);
+    const timerBadgeHtml = timerSecs > 0 ? `<span class="timer-badge">⏱️ ${timerSecs}s</span>` : '';
 
     msgDiv.innerHTML = `
+      <button type="button" class="msg-options-btn" title="Message Options (⋮)">⋮</button>
+      <div class="msg-context-menu">
+        ${buildContextMenuHtml(timeStr)}
+      </div>
       <div class="msg-bubble">
         <div class="voice-player">
           <button type="button" class="voice-play-btn" id="play_${uniqueId}">▶</button>
@@ -1232,20 +2404,45 @@ document.addEventListener('DOMContentLoaded', async () => {
           <span style="font-size: 0.75rem; color: #fff;">${duration || '0:05'}</span>
         </div>
         <audio id="el_${uniqueId}" src="${audioUrl}"></audio>
-        <div class="msg-time">🔒 E2EE Voice Note</div>
+        <div class="msg-time">${timerBadgeHtml} 🔒 E2EE Voice Note</div>
       </div>
     `;
     messagesArea.appendChild(msgDiv);
     messagesArea.scrollTop = messagesArea.scrollHeight;
     setupVoicePlayerEvents(uniqueId);
+    attachContextMenuEvents(msgDiv, id, sender, `Voice Note (${duration})`);
+
+    if (timerSecs > 0) scheduleMessageSelfDestruct(msgDiv, timerSecs);
   }
 
-  function renderIncomingVoiceMessage(sender, audioUrl, duration, timestamp) {
+  function renderIncomingVoiceMessage(sender, audioUrl, duration, timestamp, timerSecs, msgId) {
+    const id = msgId || 'vnote_in_' + Date.now();
+    renderedMsgIdsSet.add(id);
+
+    if (!timerSecs || timerSecs === 0) {
+      saveToLocalTelegramCloud(myRoomCode, myUsername, {
+        id,
+        senderUsername: sender,
+        audioDuration: duration,
+        plaintextFallback: audioUrl,
+        payloadType: 'voice',
+        timerSeconds: 0,
+        timestamp: timestamp || new Date().toLocaleTimeString()
+      });
+    }
+
+    const timeStr = timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const msgDiv = document.createElement('div');
     msgDiv.className = 'msg-bubble-container incoming';
+    msgDiv.id = id;
     const uniqueId = 'aud_' + Math.random().toString(36).substr(2, 6);
+    const timerBadgeHtml = timerSecs > 0 ? `<span class="timer-badge">⏱️ ${timerSecs}s</span>` : '';
 
     msgDiv.innerHTML = `
+      <button type="button" class="msg-options-btn" title="Message Options (⋮)">⋮</button>
+      <div class="msg-context-menu">
+        ${buildContextMenuHtml(timeStr)}
+      </div>
       <div class="msg-sender">${escapeHtml(sender)}</div>
       <div class="msg-bubble">
         <div class="voice-player">
@@ -1260,12 +2457,15 @@ document.addEventListener('DOMContentLoaded', async () => {
           <span style="font-size: 0.75rem; color: #fff;">${duration || '0:05'}</span>
         </div>
         <audio id="el_${uniqueId}" src="${audioUrl}"></audio>
-        <div class="msg-time">${timestamp || ''} <span class="e2ee-tag">🔒 Decrypted Voice</span></div>
+        <div class="msg-time">${timeStr} ${timerBadgeHtml} <span class="e2ee-tag">🔒 Decrypted Voice</span></div>
       </div>
     `;
     messagesArea.appendChild(msgDiv);
     messagesArea.scrollTop = messagesArea.scrollHeight;
     setupVoicePlayerEvents(uniqueId);
+    attachContextMenuEvents(msgDiv, id, sender, `Voice Note (${duration})`);
+
+    if (timerSecs > 0) scheduleMessageSelfDestruct(msgDiv, timerSecs);
   }
 
   function setupVoicePlayerEvents(id) {
