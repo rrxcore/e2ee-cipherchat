@@ -1,6 +1,6 @@
 /**
  * CipherChat Application Controller (rrxcore edition)
- * Features: Discord Voice Rooms, Password Protection, E2EE Voice Notes, Web Crypto API
+ * Robust Hybrid Mode: Works seamlessly on Localhost & Static GitHub Pages
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -10,6 +10,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const usernameInput = document.getElementById('usernameInput');
   const roomCodeInput = document.getElementById('roomCodeInput');
   const roomPasswordInput = document.getElementById('roomPasswordInput');
+  const serverUrlGroup = document.getElementById('serverUrlGroup');
+  const serverUrlInput = document.getElementById('serverUrlInput');
   const generateRoomBtn = document.getElementById('generateRoomBtn');
   const joinErrorMessage = document.getElementById('joinErrorMessage');
 
@@ -54,6 +56,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // State Variables
   let socket = null;
+  let isConnectedToServer = false;
   let myUsername = '';
   let myRoomCode = '';
   let myRoomPassword = '';
@@ -72,13 +75,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentVoiceChannelId = null;
   let isVoiceMuted = false;
   let isVoiceDeafened = false;
-  let voiceChannelsData = [];
+  let voiceChannelsData = [
+    { id: 'v_lounge', name: '🔊 Lounge Voice', participants: [] },
+    { id: 'v_stage', name: '🔊 E2EE Stage', participants: [] }
+  ];
 
   // Peer State: Map(socketId -> { username, publicKeyJwk, sessionKey, safetyNumber })
   const peersMap = new Map();
 
-  // Initialize Socket.io Connection
-  socket = io();
+  // Check if running on GitHub Pages
+  const isGitHubPages = window.location.hostname.includes('github.io');
+  if (isGitHubPages && serverUrlGroup) {
+    serverUrlGroup.style.display = 'block';
+  }
 
   // 1. Generate local ECDH Identity KeyPair on boot
   try {
@@ -90,6 +99,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     alert('Web Crypto API initialization failed. Please use a modern secure browser environment.');
     return;
   }
+
+  // Initialize Socket.io Connection with Graceful Fallback
+  function initSocket(targetUrl) {
+    if (socket) {
+      socket.disconnect();
+    }
+
+    try {
+      const connectTarget = targetUrl || (isGitHubPages ? 'http://localhost:3000' : window.location.origin);
+      socket = io(connectTarget, {
+        timeout: 4000,
+        reconnection: true,
+        reconnectionAttempts: 3
+      });
+
+      socket.on('connect', () => {
+        isConnectedToServer = true;
+        console.log('🟢 Socket connected to server:', socket.id);
+      });
+
+      socket.on('connect_error', () => {
+        isConnectedToServer = false;
+        console.warn('⚠️ Socket server unreachable at target URL. Operating in Standalone E2EE Mode.');
+      });
+
+      setupSocketListeners();
+    } catch (err) {
+      isConnectedToServer = false;
+      console.warn('Socket initialization fallback:', err);
+    }
+  }
+
+  initSocket();
 
   // Generate random Room Code helper
   generateRoomBtn?.addEventListener('click', () => {
@@ -104,163 +146,175 @@ document.addEventListener('DOMContentLoaded', async () => {
     myRoomCode = roomCodeInput.value.trim() || 'rrxcore-1';
     myRoomPassword = roomPasswordInput.value.trim();
 
+    const customUrl = serverUrlInput?.value.trim();
+    if (customUrl) {
+      initSocket(customUrl);
+    }
+
     joinErrorMessage.style.display = 'none';
 
-    // Join Socket Room
-    socket.emit('join_room', {
-      roomCode: myRoomCode,
-      username: myUsername,
-      publicKey: myPubKeyJwk,
-      roomPassword: myRoomPassword
-    });
-  });
-
-  // Socket Listener: Room Error
-  socket.on('room_error', ({ message }) => {
-    joinErrorMessage.textContent = `⚠️ ${message}`;
-    joinErrorMessage.style.display = 'block';
-  });
-
-  // Socket Listener: Joined Room
-  socket.on('room_joined', async ({ roomCode, mySession, peers, recentPackets, isPasswordProtected, voiceChannels }) => {
-    roomJoinOverlay.style.display = 'none';
-    currentRoomLabel.textContent = `Room: ${myRoomCode}`;
-
-    const protectionStatus = isPasswordProtected ? '🔒 Password Protected' : '🌐 Public';
-    addSystemMessage(`✨ Joined server '${roomCode}' as ${myUsername}. (${protectionStatus})`);
-
-    if (recentPackets && recentPackets.length > 0) {
-      recentPackets.forEach(renderInspectorPacket);
+    // If socket is connected to a live server, emit join_room
+    if (socket && isConnectedToServer) {
+      socket.emit('join_room', {
+        roomCode: myRoomCode,
+        username: myUsername,
+        publicKey: myPubKeyJwk,
+        roomPassword: myRoomPassword
+      });
+    } else {
+      // Standalone Mode (GitHub Pages Static Fallback) -> Immediately enter room!
+      roomJoinOverlay.style.display = 'none';
+      currentRoomLabel.textContent = `Room: ${myRoomCode}`;
+      addSystemMessage(`ℹ️ Joined room '${myRoomCode}' in Standalone Local Mode. (Connect a live server for multi-device cross-network signaling)`);
+      renderVoiceChannels();
     }
+  });
 
-    for (const peer of peers) {
+  function setupSocketListeners() {
+    if (!socket) return;
+
+    socket.on('room_error', ({ message }) => {
+      joinErrorMessage.textContent = `⚠️ ${message}`;
+      joinErrorMessage.style.display = 'block';
+    });
+
+    socket.on('room_joined', async ({ roomCode, mySession, peers, recentPackets, isPasswordProtected, voiceChannels }) => {
+      roomJoinOverlay.style.display = 'none';
+      currentRoomLabel.textContent = `Room: ${myRoomCode}`;
+
+      const protectionStatus = isPasswordProtected ? '🔒 Password Protected' : '🌐 Public';
+      addSystemMessage(`✨ Joined server '${roomCode}' as ${myUsername}. (${protectionStatus})`);
+
+      if (recentPackets && recentPackets.length > 0) {
+        recentPackets.forEach(renderInspectorPacket);
+      }
+
+      for (const peer of peers) {
+        if (peer.publicKey) {
+          await setupPeerSession(peer.socketId, peer.username, peer.publicKey);
+        }
+      }
+      renderPeerList();
+
+      if (voiceChannels) {
+        voiceChannelsData = voiceChannels;
+        renderVoiceChannels();
+      }
+    });
+
+    socket.on('peer_joined', async (peer) => {
+      addSystemMessage(`👋 User '${peer.username}' joined the room.`);
+      socket.emit('share_public_key', {
+        recipientSocketId: peer.socketId,
+        publicKey: myPubKeyJwk
+      });
       if (peer.publicKey) {
         await setupPeerSession(peer.socketId, peer.username, peer.publicKey);
+        renderPeerList();
       }
-    }
-    renderPeerList();
-
-    // Render Discord Voice Channels
-    if (voiceChannels) {
-      voiceChannelsData = voiceChannels;
-      renderVoiceChannels();
-    }
-  });
-
-  // Socket Listener: Peer Joined
-  socket.on('peer_joined', async (peer) => {
-    addSystemMessage(`👋 User '${peer.username}' joined the room.`);
-    socket.emit('share_public_key', {
-      recipientSocketId: peer.socketId,
-      publicKey: myPubKeyJwk
     });
-    if (peer.publicKey) {
-      await setupPeerSession(peer.socketId, peer.username, peer.publicKey);
+
+    socket.on('receive_peer_key', async ({ senderSocketId, senderUsername, publicKey }) => {
+      await setupPeerSession(senderSocketId, senderUsername, publicKey);
       renderPeerList();
-    }
-  });
+    });
 
-  // Socket Listener: Receive Direct Peer Public Key
-  socket.on('receive_peer_key', async ({ senderSocketId, senderUsername, publicKey }) => {
-    await setupPeerSession(senderSocketId, senderUsername, publicKey);
-    renderPeerList();
-  });
+    socket.on('receive_encrypted_payload', async (payload) => {
+      const peer = peersMap.get(payload.senderSocketId);
+      if (!peer || !peer.sessionKey) return;
 
-  // Socket Listener: Receive Encrypted Payload (Text, File, Voice Note)
-  socket.on('receive_encrypted_payload', async (payload) => {
-    const peer = peersMap.get(payload.senderSocketId);
-    if (!peer || !peer.sessionKey) return;
-
-    try {
-      if (payload.payloadType === 'file') {
-        const decryptedBuffer = await CipherCrypto.decryptPayload(
-          peer.sessionKey,
-          payload.ciphertext,
-          payload.iv,
-          true
-        );
-        const blob = new Blob([decryptedBuffer]);
-        const fileUrl = URL.createObjectURL(blob);
-        renderIncomingFileMessage(payload.senderUsername, payload.fileName, fileUrl, payload.isImage, payload.timestamp);
-      } else if (payload.payloadType === 'voice') {
-        const decryptedBuffer = await CipherCrypto.decryptPayload(
-          peer.sessionKey,
-          payload.ciphertext,
-          payload.iv,
-          true
-        );
-        const audioBlob = new Blob([decryptedBuffer], { type: 'audio/webm' });
-        const audioUrl = URL.createObjectURL(audioBlob);
-        renderIncomingVoiceMessage(payload.senderUsername, audioUrl, payload.audioDuration, payload.timestamp);
-      } else {
-        const plaintext = await CipherCrypto.decryptPayload(
-          peer.sessionKey,
-          payload.ciphertext,
-          payload.iv
-        );
-        renderIncomingMessage(payload.senderUsername, plaintext, payload.timestamp);
+      try {
+        if (payload.payloadType === 'file') {
+          const decryptedBuffer = await CipherCrypto.decryptPayload(
+            peer.sessionKey,
+            payload.ciphertext,
+            payload.iv,
+            true
+          );
+          const blob = new Blob([decryptedBuffer]);
+          const fileUrl = URL.createObjectURL(blob);
+          renderIncomingFileMessage(payload.senderUsername, payload.fileName, fileUrl, payload.isImage, payload.timestamp);
+        } else if (payload.payloadType === 'voice') {
+          const decryptedBuffer = await CipherCrypto.decryptPayload(
+            peer.sessionKey,
+            payload.ciphertext,
+            payload.iv,
+            true
+          );
+          const audioBlob = new Blob([decryptedBuffer], { type: 'audio/webm' });
+          const audioUrl = URL.createObjectURL(audioBlob);
+          renderIncomingVoiceMessage(payload.senderUsername, audioUrl, payload.audioDuration, payload.timestamp);
+        } else {
+          const plaintext = await CipherCrypto.decryptPayload(
+            peer.sessionKey,
+            payload.ciphertext,
+            payload.iv
+          );
+          renderIncomingMessage(payload.senderUsername, plaintext, payload.timestamp);
+        }
+      } catch (err) {
+        console.error('Decryption failed:', err);
       }
-    } catch (err) {
-      console.error('Decryption failed:', err);
-    }
-  });
+    });
 
-  // Socket Listener: Peer Left
-  socket.on('peer_left', ({ socketId, username }) => {
-    peersMap.delete(socketId);
-    renderPeerList();
-    addSystemMessage(`User ${username} left the room.`);
-  });
+    socket.on('peer_left', ({ socketId, username }) => {
+      peersMap.delete(socketId);
+      renderPeerList();
+      addSystemMessage(`User ${username} left the room.`);
+    });
 
-  // Socket Listener: Inspector Packet
-  socket.on('inspector_packet', (packet) => {
-    renderInspectorPacket(packet);
-  });
+    socket.on('inspector_packet', (packet) => {
+      renderInspectorPacket(packet);
+    });
 
-  // --- DISCORD VOICE ROOM SOCKET LISTENERS ---
-
-  socket.on('voice_channel_created', (channel) => {
-    voiceChannelsData.push(channel);
-    renderVoiceChannels();
-    addSystemMessage(`🔊 Voice channel '${channel.name}' was created.`);
-  });
-
-  socket.on('voice_participants_updated', ({ channelId, participants }) => {
-    const vc = voiceChannelsData.find(c => c.id === channelId);
-    if (vc) {
-      vc.participants = participants;
+    socket.on('voice_channel_created', (channel) => {
+      voiceChannelsData.push(channel);
       renderVoiceChannels();
-    }
-  });
+      addSystemMessage(`🔊 Voice channel '${channel.name}' was created.`);
+    });
 
-  socket.on('voice_peer_speaking', ({ socketId, channelId, isSpeaking }) => {
-    const avatarEl = document.getElementById(`v_avatar_${socketId}`);
-    if (avatarEl) {
-      if (isSpeaking) avatarEl.classList.add('speaking');
-      else avatarEl.classList.remove('speaking');
-    }
-  });
+    socket.on('voice_participants_updated', ({ channelId, participants }) => {
+      const vc = voiceChannelsData.find(c => c.id === channelId);
+      if (vc) {
+        vc.participants = participants;
+        renderVoiceChannels();
+      }
+    });
 
-  // Live E2EE Voice Stream Chunk Listener
-  socket.on('receive_voice_stream_chunk', async ({ senderSocketId, channelId, ciphertext, iv }) => {
-    if (isVoiceDeafened || channelId !== currentVoiceChannelId) return;
-    const peer = peersMap.get(senderSocketId);
-    if (!peer || !peer.sessionKey) return;
+    socket.on('voice_peer_speaking', ({ socketId, channelId, isSpeaking }) => {
+      const avatarEl = document.getElementById(`v_avatar_${socketId}`);
+      if (avatarEl) {
+        if (isSpeaking) avatarEl.classList.add('speaking');
+        else avatarEl.classList.remove('speaking');
+      }
+    });
 
-    try {
-      const audioBuffer = await CipherCrypto.decryptPayload(peer.sessionKey, ciphertext, iv, true);
-      playLiveVoiceChunk(audioBuffer);
-    } catch (err) {
-      console.error('Live voice chunk decryption failed:', err);
-    }
-  });
+    socket.on('receive_voice_stream_chunk', async ({ senderSocketId, channelId, ciphertext, iv }) => {
+      if (isVoiceDeafened || channelId !== currentVoiceChannelId) return;
+      const peer = peersMap.get(senderSocketId);
+      if (!peer || !peer.sessionKey) return;
+
+      try {
+        const audioBuffer = await CipherCrypto.decryptPayload(peer.sessionKey, ciphertext, iv, true);
+        playLiveVoiceChunk(audioBuffer);
+      } catch (err) {
+        console.error('Live voice chunk decryption failed:', err);
+      }
+    });
+  }
 
   // --- DISCORD VOICE ROOM METHODS ---
 
   createVoiceChannelBtn?.addEventListener('click', () => {
     const name = prompt('Enter new Voice Channel name:');
     if (name && name.trim()) {
-      socket.emit('create_voice_channel', { channelName: name.trim() });
+      if (socket && isConnectedToServer) {
+        socket.emit('create_voice_channel', { channelName: name.trim() });
+      } else {
+        const id = 'v_' + Date.now();
+        voiceChannelsData.push({ id, name: `🔊 ${name.trim()}`, participants: [] });
+        renderVoiceChannels();
+      }
     }
   });
 
@@ -271,17 +325,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       liveVoiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       currentVoiceChannelId = channelId;
 
-      socket.emit('join_voice_channel', { channelId });
+      if (socket && isConnectedToServer) {
+        socket.emit('join_voice_channel', { channelId });
+        startLiveVoiceStreaming();
+      }
 
-      // Update UI Bar
       discordVoiceBar.style.display = 'flex';
       activeVoiceChannelName.textContent = channelName;
-
-      // Start streaming encrypted audio chunks every 300ms
-      startLiveVoiceStreaming();
       addSystemMessage(`🟢 Connected to Voice Room: ${channelName}`);
     } catch (err) {
-      console.error('Failed to access microphone for voice channel:', err);
+      console.error('Microphone access denied:', err);
       alert('Microphone access is required to join Voice Channels.');
     }
   }
@@ -290,7 +343,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!currentVoiceChannelId) return;
 
     stopLiveVoiceStreaming();
-    socket.emit('leave_voice_channel');
+    if (socket && isConnectedToServer) {
+      socket.emit('leave_voice_channel');
+    }
 
     currentVoiceChannelId = null;
     discordVoiceBar.style.display = 'none';
@@ -303,10 +358,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     liveVoiceRecorder = new MediaRecorder(liveVoiceStream, { mimeType: 'audio/webm' });
 
     liveVoiceRecorder.ondataavailable = async (e) => {
-      if (e.data.size > 0 && !isVoiceMuted && currentVoiceChannelId) {
+      if (e.data.size > 0 && !isVoiceMuted && currentVoiceChannelId && socket && isConnectedToServer) {
         const arrayBuffer = await e.data.arrayBuffer();
 
-        // Broadcast voice speaking state
         socket.emit('voice_speaking_state', { isSpeaking: true });
         setTimeout(() => socket.emit('voice_speaking_state', { isSpeaking: false }), 250);
 
@@ -324,7 +378,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     };
 
-    liveVoiceRecorder.start(250); // Slice audio every 250ms for low latency
+    liveVoiceRecorder.start(250);
   }
 
   function stopLiveVoiceStreaming() {
@@ -344,7 +398,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     audio.play().catch(() => {});
   }
 
-  // Voice Bar Button Handlers
   voiceMuteBtn?.addEventListener('click', () => {
     isVoiceMuted = !isVoiceMuted;
     if (liveVoiceStream) {
@@ -441,18 +494,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     messageInput.value = '';
     renderOutgoingMessage(myUsername, text);
 
-    for (const [peerSocketId, peer] of peersMap.entries()) {
-      try {
-        const { ciphertextBase64, ivHex } = await CipherCrypto.encryptPayload(peer.sessionKey, text);
-        socket.emit('send_encrypted_payload', {
-          roomCode: myRoomCode,
-          recipientSocketId: peerSocketId,
-          ciphertext: ciphertextBase64,
-          iv: ivHex,
-          payloadType: 'text'
-        });
-      } catch (err) {
-        console.error('Text encryption error:', err);
+    if (socket && isConnectedToServer) {
+      for (const [peerSocketId, peer] of peersMap.entries()) {
+        try {
+          const { ciphertextBase64, ivHex } = await CipherCrypto.encryptPayload(peer.sessionKey, text);
+          socket.emit('send_encrypted_payload', {
+            roomCode: myRoomCode,
+            recipientSocketId: peerSocketId,
+            ciphertext: ciphertextBase64,
+            iv: ivHex,
+            payloadType: 'text'
+          });
+        } catch (err) {
+          console.error('Text encryption error:', err);
+        }
       }
     }
   });
@@ -471,21 +526,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     addSystemMessage(`Encrypting ${isImage ? 'image' : 'file'} '${file.name}' (${(file.size / 1024).toFixed(1)} KB)...`);
     const arrayBuffer = await file.arrayBuffer();
 
-    for (const [peerSocketId, peer] of peersMap.entries()) {
-      try {
-        const { ciphertextBase64, ivHex } = await CipherCrypto.encryptPayload(peer.sessionKey, arrayBuffer);
-        socket.emit('send_encrypted_payload', {
-          roomCode: myRoomCode,
-          recipientSocketId: peerSocketId,
-          ciphertext: ciphertextBase64,
-          iv: ivHex,
-          payloadType: 'file',
-          fileName: file.name,
-          fileSize: file.size,
-          isImage: isImage
-        });
-      } catch (err) {
-        console.error('File E2EE failed:', err);
+    if (socket && isConnectedToServer) {
+      for (const [peerSocketId, peer] of peersMap.entries()) {
+        try {
+          const { ciphertextBase64, ivHex } = await CipherCrypto.encryptPayload(peer.sessionKey, arrayBuffer);
+          socket.emit('send_encrypted_payload', {
+            roomCode: myRoomCode,
+            recipientSocketId: peerSocketId,
+            ciphertext: ciphertextBase64,
+            iv: ivHex,
+            payloadType: 'file',
+            fileName: file.name,
+            fileSize: file.size,
+            isImage: isImage
+          });
+        } catch (err) {
+          console.error('File E2EE failed:', err);
+        }
       }
     }
 
@@ -535,19 +592,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       const arrayBuffer = await audioBlob.arrayBuffer();
       const durationStr = `${Math.floor(recordingSeconds / 60)}:${String(recordingSeconds % 60).padStart(2, '0')}`;
 
-      for (const [peerSocketId, peer] of peersMap.entries()) {
-        try {
-          const { ciphertextBase64, ivHex } = await CipherCrypto.encryptPayload(peer.sessionKey, arrayBuffer);
-          socket.emit('send_encrypted_payload', {
-            roomCode: myRoomCode,
-            recipientSocketId: peerSocketId,
-            ciphertext: ciphertextBase64,
-            iv: ivHex,
-            payloadType: 'voice',
-            audioDuration: durationStr
-          });
-        } catch (err) {
-          console.error('Voice note encryption failed:', err);
+      if (socket && isConnectedToServer) {
+        for (const [peerSocketId, peer] of peersMap.entries()) {
+          try {
+            const { ciphertextBase64, ivHex } = await CipherCrypto.encryptPayload(peer.sessionKey, arrayBuffer);
+            socket.emit('send_encrypted_payload', {
+              roomCode: myRoomCode,
+              recipientSocketId: peerSocketId,
+              ciphertext: ciphertextBase64,
+              iv: ivHex,
+              payloadType: 'voice',
+              audioDuration: durationStr
+            });
+          } catch (err) {
+            console.error('Voice note encryption failed:', err);
+          }
         }
       }
 
