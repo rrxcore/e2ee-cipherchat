@@ -1,6 +1,6 @@
 /* ==========================================================================
    CIPHERCHAT - rrxcore edition
-   ULTRA-OPTIMIZED iOS 18 & DISCORD E2EE VOICE CHANNELS INTERFACE
+   ULTRA-OPTIMIZED iOS 18 & DISCORD E2EE VOICE CHANNELS & VOICE CHANGER
    ========================================================================== */
 
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
@@ -532,7 +532,7 @@ body {
 .voice-ctrl-btns {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .voice-icon-btn {
@@ -563,6 +563,52 @@ body {
 .voice-icon-btn.disconnect-btn {
   background: rgba(255, 45, 85, 0.3);
   border-color: var(--ios-pink);
+}
+
+/* VOICE CHANGER 10 FX GRID */
+.fx-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.fx-card {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+
+.fx-card:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.fx-card.active {
+  background: rgba(175, 82, 222, 0.2);
+  border-color: var(--ios-purple);
+  box-shadow: 0 0 14px rgba(175, 82, 222, 0.35);
+}
+
+.fx-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.fx-desc {
+  font-size: 0.68rem;
+  color: var(--text-muted);
 }
 
 /* CHAT MAIN PANEL */

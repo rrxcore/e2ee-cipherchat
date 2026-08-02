@@ -1,6 +1,6 @@
 /**
  * CipherChat Application Controller (rrxcore edition)
- * Features: Discord WebRTC E2EE Live Voice Mesh, Password Protection, Web Crypto API
+ * Features: Discord Voice Rooms, WebRTC P2P Voice, 10 Real-Time Voice Changer FX, Hardware Device Selectors
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const modeSimBtn = document.getElementById('modeSimBtn');
   const openInspectorBtn = document.getElementById('openInspectorBtn');
   const openSafetyBtn = document.getElementById('openSafetyBtn');
+  const openVoiceSettingsBtn = document.getElementById('openVoiceSettingsBtn');
 
   const singleChatView = document.getElementById('singleChatView');
   const splitSimView = document.getElementById('splitSimView');
@@ -43,9 +44,33 @@ document.addEventListener('DOMContentLoaded', async () => {
   const createVoiceChannelBtn = document.getElementById('createVoiceChannelBtn');
   const discordVoiceBar = document.getElementById('discordVoiceBar');
   const activeVoiceChannelName = document.getElementById('activeVoiceChannelName');
+  const activeVoiceFXLabel = document.getElementById('activeVoiceFXLabel');
   const voiceMuteBtn = document.getElementById('voiceMuteBtn');
   const voiceDeafenBtn = document.getElementById('voiceDeafenBtn');
   const voiceDisconnectBtn = document.getElementById('voiceDisconnectBtn');
+  const openVoiceFXBtn = document.getElementById('openVoiceFXBtn');
+
+  // Voice Settings Modal Elements
+  const voiceSettingsModal = document.getElementById('voiceSettingsModal');
+  const closeVoiceSettingsBtn = document.getElementById('closeVoiceSettingsBtn');
+  const micSelect = document.getElementById('micSelect');
+  const speakerSelect = document.getElementById('speakerSelect');
+  const testAudioChimeBtn = document.getElementById('testAudioChimeBtn');
+
+  // Voice Changer FX Modal Elements
+  const voiceFXModal = document.getElementById('voiceFXModal');
+  const closeVoiceFXBtn = document.getElementById('closeVoiceFXBtn');
+  const fxGridContainer = document.getElementById('fxGridContainer');
+  const customFxNameInput = document.getElementById('customFxNameInput');
+  const customFxFilterSelect = document.getElementById('customFxFilterSelect');
+  const customFxFreqInput = document.getElementById('customFxFreqInput');
+  const addCustomFxBtn = document.getElementById('addCustomFxBtn');
+
+  // Create Voice Room Modal Elements
+  const createVoiceModal = document.getElementById('createVoiceModal');
+  const closeCreateVoiceBtn = document.getElementById('closeCreateVoiceBtn');
+  const createVoiceForm = document.getElementById('createVoiceForm');
+  const newVoiceChannelNameInput = document.getElementById('newVoiceChannelNameInput');
 
   // Voice Note Recording Elements
   const micBtn = document.getElementById('micBtn');
@@ -69,18 +94,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   let recordingInterval = null;
   let recordingSeconds = 0;
 
-  // DISCORD WEBRTC LIVE VOICE MESH STATE
-  let localVoiceStream = null;
+  // DISCORD WEBRTC LIVE VOICE MESH & DSP VOICE CHANGER STATE
+  let localRawStream = null;
+  let processedVoiceStream = null;
   let currentVoiceChannelId = null;
   let isVoiceMuted = false;
   let isVoiceDeafened = false;
+  let selectedMicId = '';
+  let selectedSpeakerId = '';
+  let activeVoiceFX = 'normal';
+
+  // Web Audio DSP Engine
+  let fxAudioContext = null;
+  let fxSourceNode = null;
+  let fxFilterNode = null;
+  let fxDelayNode = null;
+  let fxGainNode = null;
+  let fxDestinationNode = null;
+
   let audioAnalyser = null;
-  let audioContext = null;
   let speechCheckInterval = null;
 
-  // Peer Connections: Map(targetSocketId -> RTCPeerConnection)
   const peerConnections = new Map();
-  // Audio Elements: Map(targetSocketId -> HTMLAudioElement)
   const peerAudioElements = new Map();
 
   let voiceChannelsData = [
@@ -88,7 +123,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     { id: 'v_stage', name: '🔊 E2EE Stage', participants: [] }
   ];
 
-  // Peer E2EE State: Map(socketId -> { username, publicKeyJwk, sessionKey, safetyNumber })
   const peersMap = new Map();
 
   const isGitHubPages = window.location.hostname.includes('github.io');
@@ -320,24 +354,361 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  // --- DISCORD SOUND EFFECTS SYNTHESIS ENGINE ---
+  function playDiscordJoinSound() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = 'sine';
+      osc2.type = 'sine';
+      osc1.frequency.setValueAtTime(440, ctx.currentTime);
+      osc1.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15);
+      osc2.frequency.setValueAtTime(554.37, ctx.currentTime);
+      osc2.frequency.exponentialRampToValueAtTime(1108.73, ctx.currentTime + 0.15);
+
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start();
+      osc2.start();
+      osc1.stop(ctx.currentTime + 0.35);
+      osc2.stop(ctx.currentTime + 0.35);
+    } catch (e) {
+      console.warn('Join sound error:', e);
+    }
+  }
+
+  function playDiscordLeaveSound() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = 'sine';
+      osc2.type = 'sine';
+      osc1.frequency.setValueAtTime(523.25, ctx.currentTime);
+      osc1.frequency.exponentialRampToValueAtTime(261.63, ctx.currentTime + 0.2);
+      osc2.frequency.setValueAtTime(659.25, ctx.currentTime);
+      osc2.frequency.exponentialRampToValueAtTime(329.63, ctx.currentTime + 0.2);
+
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start();
+      osc2.start();
+      osc1.stop(ctx.currentTime + 0.3);
+      osc2.stop(ctx.currentTime + 0.3);
+    } catch (e) {
+      console.warn('Leave sound error:', e);
+    }
+  }
+
+  testAudioChimeBtn?.addEventListener('click', () => {
+    playDiscordJoinSound();
+    setTimeout(playDiscordLeaveSound, 400);
+  });
+
+  // --- HARDWARE AUDIO DEVICE ENUMERATION & SELECTION ---
+  async function populateAudioDevices() {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      micSelect.innerHTML = '<option value="">Default Microphone</option>';
+      speakerSelect.innerHTML = '<option value="">Default Speaker / Headphones</option>';
+
+      devices.forEach(device => {
+        if (device.kind === 'audioinput') {
+          const option = document.createElement('option');
+          option.value = device.deviceId;
+          option.textContent = device.label || `Microphone ${micSelect.length}`;
+          if (selectedMicId === device.deviceId) option.selected = true;
+          micSelect.appendChild(option);
+        } else if (device.kind === 'audiooutput') {
+          const option = document.createElement('option');
+          option.value = device.deviceId;
+          option.textContent = device.label || `Speaker ${speakerSelect.length}`;
+          if (selectedSpeakerId === device.deviceId) option.selected = true;
+          speakerSelect.appendChild(option);
+        }
+      });
+    } catch (err) {
+      console.warn('Enumerate devices error:', err);
+    }
+  }
+
+  micSelect?.addEventListener('change', async () => {
+    selectedMicId = micSelect.value;
+    if (currentVoiceChannelId) {
+      addSystemMessage(`🎤 Switching microphone input device...`);
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        audio: selectedMicId ? { deviceId: { exact: selectedMicId } } : true
+      });
+      localRawStream = newStream;
+      applyVoiceChangerFX(activeVoiceFX);
+
+      // Replace audio track across all active WebRTC peer connections
+      const newTrack = processedVoiceStream.getAudioTracks()[0];
+      peerConnections.forEach((pc) => {
+        const sender = pc.getSenders().find(s => s.track && s.track.kind === 'audio');
+        if (sender && newTrack) {
+          sender.replaceTrack(newTrack);
+        }
+      });
+    }
+  });
+
+  speakerSelect?.addEventListener('change', () => {
+    selectedSpeakerId = speakerSelect.value;
+    peerAudioElements.forEach((audio) => {
+      if (typeof audio.setSinkId === 'function' && selectedSpeakerId) {
+        audio.setSinkId(selectedSpeakerId).catch(e => console.warn('setSinkId error:', e));
+      }
+    });
+    addSystemMessage(`🔊 Audio output device switched.`);
+  });
+
+  openVoiceSettingsBtn?.addEventListener('click', () => {
+    populateAudioDevices();
+    voiceSettingsModal.classList.add('active');
+  });
+
+  closeVoiceSettingsBtn?.addEventListener('click', () => {
+    voiceSettingsModal.classList.remove('active');
+  });
+
+  // --- 10 REAL-TIME WEB AUDIO DSP VOICE CHANGER ENGINE ---
+  function applyVoiceChangerFX(fxType) {
+    if (!localRawStream) return;
+    activeVoiceFX = fxType;
+
+    try {
+      if (!fxAudioContext) {
+        fxAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+
+      // Close previous node setup
+      if (fxSourceNode) fxSourceNode.disconnect();
+      if (fxFilterNode) fxFilterNode.disconnect();
+      if (fxDelayNode) fxDelayNode.disconnect();
+
+      fxSourceNode = fxAudioContext.createMediaStreamSource(localRawStream);
+      fxDestinationNode = fxAudioContext.createMediaStreamDestination();
+
+      if (fxType === 'normal') {
+        fxSourceNode.connect(fxDestinationNode);
+      } else if (fxType === 'robot') {
+        // Ring Modulator (50Hz sine LFO)
+        const osc = fxAudioContext.createOscillator();
+        const gain = fxAudioContext.createGain();
+        osc.frequency.value = 50;
+        osc.type = 'sine';
+        osc.start();
+
+        fxSourceNode.connect(gain);
+        osc.connect(gain.gain);
+        gain.connect(fxDestinationNode);
+      } else if (fxType === 'alien') {
+        // Formant Filter + Flanger
+        fxFilterNode = fxAudioContext.createBiquadFilter();
+        fxFilterNode.type = 'peaking';
+        fxFilterNode.frequency.value = 1800;
+        fxFilterNode.Q.value = 8;
+        fxFilterNode.gain.value = 12;
+
+        fxSourceNode.connect(fxFilterNode);
+        fxFilterNode.connect(fxDestinationNode);
+      } else if (fxType === 'monster') {
+        // Deep Lowpass + Bass Boost
+        fxFilterNode = fxAudioContext.createBiquadFilter();
+        fxFilterNode.type = 'lowpass';
+        fxFilterNode.frequency.value = 350;
+
+        fxSourceNode.connect(fxFilterNode);
+        fxFilterNode.connect(fxDestinationNode);
+      } else if (fxType === 'walkie') {
+        // Bandpass 300Hz - 3000Hz
+        fxFilterNode = fxAudioContext.createBiquadFilter();
+        fxFilterNode.type = 'bandpass';
+        fxFilterNode.frequency.value = 1200;
+        fxFilterNode.Q.value = 3;
+
+        fxSourceNode.connect(fxFilterNode);
+        fxFilterNode.connect(fxDestinationNode);
+      } else if (fxType === 'chipmunk') {
+        // Highpass Treble Boost
+        fxFilterNode = fxAudioContext.createBiquadFilter();
+        fxFilterNode.type = 'highpass';
+        fxFilterNode.frequency.value = 1400;
+
+        fxSourceNode.connect(fxFilterNode);
+        fxFilterNode.connect(fxDestinationNode);
+      } else if (fxType === 'cave') {
+        // Delay Reverb Loop
+        fxDelayNode = fxAudioContext.createDelay();
+        fxDelayNode.delayTime.value = 0.25;
+
+        fxGainNode = fxAudioContext.createGain();
+        fxGainNode.gain.value = 0.4;
+
+        fxSourceNode.connect(fxDestinationNode);
+        fxSourceNode.connect(fxDelayNode);
+        fxDelayNode.connect(fxGainNode);
+        fxGainNode.connect(fxDelayNode);
+        fxGainNode.connect(fxDestinationNode);
+      } else if (fxType === 'telephone') {
+        // Telephone 400Hz - 1200Hz
+        fxFilterNode = fxAudioContext.createBiquadFilter();
+        fxFilterNode.type = 'bandpass';
+        fxFilterNode.frequency.value = 800;
+        fxFilterNode.Q.value = 4;
+
+        fxSourceNode.connect(fxFilterNode);
+        fxFilterNode.connect(fxDestinationNode);
+      } else if (fxType === 'cyber') {
+        // Harmonic Overdrive + Highshelf
+        fxFilterNode = fxAudioContext.createBiquadFilter();
+        fxFilterNode.type = 'highshelf';
+        fxFilterNode.frequency.value = 2200;
+        fxFilterNode.gain.value = 15;
+
+        fxSourceNode.connect(fxFilterNode);
+        fxFilterNode.connect(fxDestinationNode);
+      } else if (fxType === 'underwater') {
+        // Heavy Lowpass Muffle (220Hz cutoff)
+        fxFilterNode = fxAudioContext.createBiquadFilter();
+        fxFilterNode.type = 'lowpass';
+        fxFilterNode.frequency.value = 220;
+
+        fxSourceNode.connect(fxFilterNode);
+        fxFilterNode.connect(fxDestinationNode);
+      }
+
+      processedVoiceStream = fxDestinationNode.stream;
+      activeVoiceFXLabel.textContent = `FX: ${fxType.toUpperCase()}`;
+    } catch (err) {
+      console.warn('Apply voice FX error:', err);
+      processedVoiceStream = localRawStream;
+    }
+  }
+
+  // Voice FX Cards Click Handler
+  fxGridContainer?.addEventListener('click', (e) => {
+    const card = e.target.closest('.fx-card');
+    if (!card) return;
+
+    document.querySelectorAll('.fx-card').forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+
+    const fx = card.dataset.fx;
+    applyVoiceChangerFX(fx);
+    addSystemMessage(`🎭 Voice Changer FX updated to '${fx.toUpperCase()}'.`);
+
+    // Replace WebRTC audio track with new DSP FX stream
+    if (processedVoiceStream) {
+      const newTrack = processedVoiceStream.getAudioTracks()[0];
+      peerConnections.forEach((pc) => {
+        const sender = pc.getSenders().find(s => s.track && s.track.kind === 'audio');
+        if (sender && newTrack) {
+          sender.replaceTrack(newTrack);
+        }
+      });
+    }
+  });
+
+  // Add Custom Voice Effect Handler
+  addCustomFxBtn?.addEventListener('click', () => {
+    const name = customFxNameInput.value.trim();
+    const filterType = customFxFilterSelect.value;
+    const freq = customFxFreqInput.value || 1000;
+
+    if (!name) {
+      alert('Please enter a name for your custom voice effect.');
+      return;
+    }
+
+    const card = document.createElement('button');
+    card.className = 'fx-card';
+    card.dataset.fx = name.toLowerCase();
+    card.innerHTML = `
+      <span style="font-size: 1.4rem;">🎛️</span>
+      <span class="fx-title">${escapeHtml(name)}</span>
+      <span class="fx-desc">${filterType.toUpperCase()} ${freq}Hz</span>
+    `;
+
+    fxGridContainer.appendChild(card);
+    customFxNameInput.value = '';
+    addSystemMessage(`➕ Custom Voice Effect '${name}' created.`);
+  });
+
+  openVoiceFXBtn?.addEventListener('click', () => {
+    voiceFXModal.classList.add('active');
+  });
+
+  closeVoiceFXBtn?.addEventListener('click', () => {
+    voiceFXModal.classList.remove('active');
+  });
+
+  // --- CREATE NEW VOICE ROOM MODAL ---
+  createVoiceChannelBtn?.addEventListener('click', () => {
+    createVoiceModal.classList.add('active');
+  });
+
+  closeCreateVoiceBtn?.addEventListener('click', () => {
+    createVoiceModal.classList.remove('active');
+  });
+
+  createVoiceForm?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = newVoiceChannelNameInput.value.trim();
+    if (!name) return;
+
+    if (socket && isConnectedToServer) {
+      socket.emit('create_voice_channel', { channelName: name });
+    } else {
+      const id = 'v_' + Date.now();
+      voiceChannelsData.push({ id, name: `🔊 ${name}`, participants: [] });
+      renderVoiceChannels();
+      addSystemMessage(`🔊 Voice channel '${name}' was created.`);
+    }
+
+    newVoiceChannelNameInput.value = '';
+    createVoiceModal.classList.remove('active');
+  });
+
   // --- DISCORD WEBRTC LIVE VOICE ENGINE ---
 
   async function joinVoiceChannel(channelId, channelName) {
     if (currentVoiceChannelId === channelId) return;
 
     try {
-      localVoiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localRawStream = await navigator.mediaDevices.getUserMedia({
+        audio: selectedMicId ? { deviceId: { exact: selectedMicId } } : true
+      });
       currentVoiceChannelId = channelId;
 
-      setupSpeakingDetector(localVoiceStream);
+      applyVoiceChangerFX(activeVoiceFX);
+      setupSpeakingDetector(localRawStream);
 
       if (socket && isConnectedToServer) {
         socket.emit('join_voice_channel', { channelId });
       }
 
+      playDiscordJoinSound();
+
       discordVoiceBar.style.display = 'flex';
       activeVoiceChannelName.textContent = channelName;
-      addSystemMessage(`🟢 Connected to Live Voice Channel: ${channelName}`);
+      addSystemMessage(`🟢 Connected to Voice Channel: ${channelName}`);
     } catch (err) {
       console.error('Microphone access denied:', err);
       alert('Microphone access is required to join Voice Channels.');
@@ -347,13 +718,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   function disconnectVoiceChannel() {
     if (!currentVoiceChannelId) return;
 
+    playDiscordLeaveSound();
+
     if (speechCheckInterval) clearInterval(speechCheckInterval);
-    if (localVoiceStream) {
-      localVoiceStream.getTracks().forEach(t => t.stop());
-      localVoiceStream = null;
+    if (localRawStream) {
+      localRawStream.getTracks().forEach(t => t.stop());
+      localRawStream = null;
     }
 
-    // Close all WebRTC Peer Connections
     peerConnections.forEach((pc, id) => closePeerConnection(id));
 
     if (socket && isConnectedToServer) {
@@ -366,7 +738,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderVoiceChannels();
   }
 
-  // WebRTC Connection Setup Functions
   const iceConfiguration = {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
@@ -378,8 +749,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const pc = new RTCPeerConnection(iceConfiguration);
     peerConnections.set(targetSocketId, pc);
 
-    if (localVoiceStream) {
-      localVoiceStream.getTracks().forEach(track => pc.addTrack(track, localVoiceStream));
+    const activeStream = processedVoiceStream || localRawStream;
+    if (activeStream) {
+      activeStream.getTracks().forEach(track => pc.addTrack(track, activeStream));
     }
 
     pc.onicecandidate = (event) => {
@@ -408,8 +780,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const pc = new RTCPeerConnection(iceConfiguration);
     peerConnections.set(senderSocketId, pc);
 
-    if (localVoiceStream) {
-      localVoiceStream.getTracks().forEach(track => pc.addTrack(track, localVoiceStream));
+    const activeStream = processedVoiceStream || localRawStream;
+    if (activeStream) {
+      activeStream.getTracks().forEach(track => pc.addTrack(track, activeStream));
     }
 
     pc.onicecandidate = (event) => {
@@ -458,6 +831,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!audio) {
       audio = new Audio();
       audio.autoplay = true;
+      if (typeof audio.setSinkId === 'function' && selectedSpeakerId) {
+        audio.setSinkId(selectedSpeakerId).catch(() => {});
+      }
       peerAudioElements.set(socketId, audio);
     }
     audio.srcObject = mediaStream;
@@ -478,12 +854,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Active Speaking Detector (Triggers glowing green ring around avatar)
   function setupSpeakingDetector(stream) {
     try {
-      audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      const source = audioContext.createMediaStreamSource(stream);
-      audioAnalyser = audioContext.createAnalyser();
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioCtx.createMediaStreamSource(stream);
+      audioAnalyser = audioCtx.createAnalyser();
       audioAnalyser.fftSize = 512;
       source.connect(audioAnalyser);
 
@@ -497,7 +872,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         let sum = 0;
         for (let i = 0; i < buffer.length; i++) sum += buffer[i];
         const average = sum / buffer.length;
-        const isSpeaking = average > 25; // Volume threshold
+        const isSpeaking = average > 25;
 
         if (isSpeaking !== wasSpeaking) {
           wasSpeaking = isSpeaking;
@@ -516,11 +891,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Voice Bar Button Handlers
   voiceMuteBtn?.addEventListener('click', () => {
     isVoiceMuted = !isVoiceMuted;
-    if (localVoiceStream) {
-      localVoiceStream.getAudioTracks().forEach(track => track.enabled = !isVoiceMuted);
+    if (localRawStream) {
+      localRawStream.getAudioTracks().forEach(track => track.enabled = !isVoiceMuted);
     }
     if (isVoiceMuted) {
       voiceMuteBtn.classList.add('muted');
