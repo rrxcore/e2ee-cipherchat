@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CipherChat | rrxcore edition</title>
-  <meta name="description" content="CipherChat rrxcore edition - Discord-Style E2EE Live Voice Channels and Web Crypto API.">
+  <meta name="description" content="CipherChat rrxcore edition - Discord-Style WebRTC Live Voice, Voice Changer & Web Crypto API.">
   <link rel="stylesheet" href="css/style.css">
-  <!-- Load Socket.io via CDN so GitHub Pages never 404s -->
+  <!-- Load Socket.io via CDN -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body>
@@ -26,7 +26,7 @@
     <!-- Floating Dynamic Island Indicator -->
     <div class="dynamic-island-pill">
       <div class="dynamic-island-dot"></div>
-      <span id="dynamicIslandText">🔒 E2EE Session Secured • ECDH P-256</span>
+      <span id="dynamicIslandText">🔒 E2EE Session Secured • WebRTC P2P Voice</span>
     </div>
 
     <!-- Mode Controls -->
@@ -35,6 +35,10 @@
         <button class="mode-btn active" id="modeTabBtn">🌐 Multi-Tab</button>
         <button class="mode-btn" id="modeSimBtn">⚡ Simulator</button>
       </div>
+
+      <button class="apple-btn" id="openVoiceSettingsBtn" title="Voice & Hardware Settings">
+        ⚙️ Settings
+      </button>
 
       <button class="apple-btn" id="openSafetyBtn" title="Verify E2EE Safety Fingerprint">
         🛡️ Safety
@@ -77,7 +81,7 @@
             <input type="password" id="roomPasswordInput" class="apple-input" placeholder="Enter password...">
           </div>
 
-          <!-- Relay Server Config for GitHub Pages -->
+          <!-- Relay Server Config -->
           <div class="form-group" id="serverUrlGroup" style="display: none;">
             <label for="serverUrlInput">Signaling Server URL (For GitHub Pages Multi-Device)</label>
             <input type="text" id="serverUrlInput" class="apple-input" placeholder="http://localhost:3000 or https://your-server.onrender.com">
@@ -87,7 +91,7 @@
         </form>
 
         <div class="crypto-specs-pill">
-          ⚡ rrxcore • Discord Voice Rooms • E2EE Mesh Stream • AES-256-GCM
+          ⚡ rrxcore • WebRTC Voice • 10 Voice Changer FX • Device Selectors
         </div>
       </div>
     </div>
@@ -112,7 +116,7 @@
             <!-- Voice Channel Section -->
             <div class="channel-section-title" style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
               <span>🔊 VOICE ROOMS</span>
-              <button type="button" id="createVoiceChannelBtn" style="background: none; border: none; color: var(--ios-green); cursor: pointer; font-size: 0.85rem;" title="Create Custom Voice Channel">➕</button>
+              <button type="button" id="createVoiceChannelBtn" style="background: none; border: none; color: var(--ios-green); cursor: pointer; font-size: 0.9rem;" title="Create Custom Voice Channel">➕</button>
             </div>
 
             <!-- Dynamic Voice Channels -->
@@ -133,12 +137,13 @@
               <div class="voice-connected-dot"></div>
               <div>
                 <div style="font-size: 0.75rem; font-weight: 800; color: var(--ios-green);" id="activeVoiceChannelName">Voice Connected</div>
-                <div style="font-size: 0.68rem; color: var(--text-muted);">RTC / E2EE Stream</div>
+                <div style="font-size: 0.68rem; color: var(--ios-purple); font-weight: 600;" id="activeVoiceFXLabel">FX: Normal</div>
               </div>
             </div>
             <div class="voice-ctrl-btns">
               <button type="button" class="voice-icon-btn" id="voiceMuteBtn" title="Toggle Mute">🎤</button>
               <button type="button" class="voice-icon-btn" id="voiceDeafenBtn" title="Toggle Deafen">🎧</button>
+              <button type="button" class="voice-icon-btn" id="openVoiceFXBtn" title="Voice Changer FX">🎭</button>
               <button type="button" class="voice-icon-btn disconnect-btn" id="voiceDisconnectBtn" title="Disconnect Voice">❌</button>
             </div>
           </div>
@@ -158,7 +163,7 @@
 
           <!-- Messages Area -->
           <div class="messages-area" id="messagesArea">
-            <div class="system-message">✨ Session initialized. Local ECDH keypair ready.</div>
+            <div class="system-message">✨ Session initialized. WebRTC Voice Engine & Keypair ready.</div>
           </div>
 
           <!-- Input Bar & Voice Recording System -->
@@ -227,7 +232,136 @@
 
   </main>
 
-  <!-- 4. LIVE SERVER PACKET INSPECTOR DRAWER -->
+  <!-- 4. VOICE & HARDWARE SETTINGS MODAL -->
+  <div class="modal-overlay" id="voiceSettingsModal">
+    <div class="safety-modal" style="max-width: 520px;">
+      <button class="modal-close" id="closeVoiceSettingsBtn">✕</button>
+      <h3 style="font-size: 1.2rem; margin-bottom: 6px; font-weight: 800;">🎙️ Voice & Audio Hardware Settings</h3>
+      <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.45;">
+        Select your active Microphone input and Speaker output devices.
+      </p>
+
+      <div style="margin: 18px 0; display: flex; flex-direction: column; gap: 14px;">
+        <div class="form-group">
+          <label for="micSelect">🎤 Microphone Input Device</label>
+          <select id="micSelect" class="apple-input" style="background: rgba(0, 0, 0, 0.6);">
+            <option value="">Default Microphone</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="speakerSelect">🔊 Speaker / Headphone Output Device</label>
+          <select id="speakerSelect" class="apple-input" style="background: rgba(0, 0, 0, 0.6);">
+            <option value="">Default Speaker</option>
+          </select>
+        </div>
+
+        <button type="button" class="apple-btn btn-primary" id="testAudioChimeBtn">🎵 Test Discord Chimes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. REAL-TIME VOICE CHANGER & FX MODAL (10 FX + CUSTOM FX) -->
+  <div class="modal-overlay" id="voiceFXModal">
+    <div class="safety-modal" style="max-width: 560px;">
+      <button class="modal-close" id="closeVoiceFXBtn">✕</button>
+      <h3 style="font-size: 1.2rem; margin-bottom: 6px; font-weight: 800;">🎭 Real-Time Voice Changer (10 Presets)</h3>
+      <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.45;">
+        Select a real-time Web Audio DSP voice filter or add custom voice effects.
+      </p>
+
+      <!-- 10 Voice FX Grid -->
+      <div class="fx-grid" id="fxGridContainer">
+        <button class="fx-card active" data-fx="normal">
+          <span style="font-size: 1.4rem;">🎙️</span>
+          <span class="fx-title">Normal</span>
+          <span class="fx-desc">Unfiltered Voice</span>
+        </button>
+        <button class="fx-card" data-fx="robot">
+          <span style="font-size: 1.4rem;">🤖</span>
+          <span class="fx-title">Robot</span>
+          <span class="fx-desc">50Hz Ring Modulator</span>
+        </button>
+        <button class="fx-card" data-fx="alien">
+          <span style="font-size: 1.4rem;">👽</span>
+          <span class="fx-title">Alien</span>
+          <span class="fx-desc">Formant Flanger</span>
+        </button>
+        <button class="fx-card" data-fx="monster">
+          <span style="font-size: 1.4rem;">👹</span>
+          <span class="fx-title">Monster</span>
+          <span class="fx-desc">Deep Pitch & Bass</span>
+        </button>
+        <button class="fx-card" data-fx="walkie">
+          <span style="font-size: 1.4rem;">📻</span>
+          <span class="fx-title">Walkie-Talkie</span>
+          <span class="fx-desc">Radio Bandpass</span>
+        </button>
+        <button class="fx-card" data-fx="chipmunk">
+          <span style="font-size: 1.4rem;">🐿️</span>
+          <span class="fx-title">Chipmunk</span>
+          <span class="fx-desc">High Treble Boost</span>
+        </button>
+        <button class="fx-card" data-fx="cave">
+          <span style="font-size: 1.4rem;">🌌</span>
+          <span class="fx-title">Cave Echo</span>
+          <span class="fx-desc">0.25s Reverb Feedback</span>
+        </button>
+        <button class="fx-card" data-fx="telephone">
+          <span style="font-size: 1.4rem;">📞</span>
+          <span class="fx-title">Telephone</span>
+          <span class="fx-desc">Vintage Phone Line</span>
+        </button>
+        <button class="fx-card" data-fx="cyber">
+          <span style="font-size: 1.4rem;">🚀</span>
+          <span class="fx-title">Cyber Helium</span>
+          <span class="fx-desc">Harmonic Overdrive</span>
+        </button>
+        <button class="fx-card" data-fx="underwater">
+          <span style="font-size: 1.4rem;">🌊</span>
+          <span class="fx-title">Underwater</span>
+          <span class="fx-desc">220Hz Lowpass Muffle</span>
+        </button>
+      </div>
+
+      <!-- Add Custom Voice Effect Form -->
+      <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.12);">
+        <h4 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 8px;">➕ Add Custom Voice Effect</h4>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <input type="text" id="customFxNameInput" class="apple-input" placeholder="Effect Name (e.g. Megaphone)" style="flex: 1; min-width: 140px;">
+          <select id="customFxFilterSelect" class="apple-input" style="width: 130px; background: rgba(0,0,0,0.6);">
+            <option value="lowpass">Lowpass</option>
+            <option value="highpass">Highpass</option>
+            <option value="bandpass">Bandpass</option>
+            <option value="peaking">Peaking</option>
+          </select>
+          <input type="number" id="customFxFreqInput" class="apple-input" placeholder="Freq (Hz)" value="1500" style="width: 90px;">
+          <button type="button" class="apple-btn btn-primary" id="addCustomFxBtn">Add Effect</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. CREATE VOICE CHANNEL MODAL -->
+  <div class="modal-overlay" id="createVoiceModal">
+    <div class="safety-modal" style="max-width: 400px;">
+      <button class="modal-close" id="closeCreateVoiceBtn">✕</button>
+      <h3 style="font-size: 1.2rem; margin-bottom: 6px; font-weight: 800;">➕ Create New Voice Room</h3>
+      <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.45;">
+        Create a new Discord-style voice channel for your room.
+      </p>
+
+      <form id="createVoiceForm" style="margin-top: 16px;">
+        <div class="form-group">
+          <label for="newVoiceChannelNameInput">Channel Name</label>
+          <input type="text" id="newVoiceChannelNameInput" class="apple-input" placeholder="e.g. Gaming-Lobby" required>
+        </div>
+        <button type="submit" class="apple-btn btn-primary btn-full">Create Voice Room 🔊</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 7. LIVE SERVER PACKET INSPECTOR DRAWER -->
   <div class="inspector-drawer" id="inspectorDrawer">
     <div class="inspector-header">
       <div class="inspector-title">
@@ -241,7 +375,7 @@
     </div>
   </div>
 
-  <!-- 5. SAFETY FINGERPRINT MODAL -->
+  <!-- 8. SAFETY FINGERPRINT MODAL -->
   <div class="modal-overlay" id="safetyModal">
     <div class="safety-modal">
       <button class="modal-close" id="closeSafetyBtn">✕</button>
