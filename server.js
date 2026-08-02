@@ -3,6 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 const app = express();
 const server = http.createServer(app);
@@ -17,6 +18,19 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Auto-detect local LAN IP address for Mobile-to-PC connections
+function getLocalIpAddress() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
+}
 
 // Persistent Telegram Cloud Database File Setup
 const dataDir = path.join(__dirname, 'data');
@@ -393,9 +407,12 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(PORT, () => {
+const localIp = getLocalIpAddress();
+
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`====================================================`);
   console.log(`🔒 CIPHERCHAT E2EE SERVER RUNNING ON PORT ${PORT}`);
-  console.log(`🌐 Open http://localhost:${PORT} in your browser`);
+  console.log(`🌐 PC Local Access:   http://localhost:${PORT}`);
+  console.log(`📱 Mobile / Wi-Fi URL: http://${localIp}:${PORT}`);
   console.log(`====================================================`);
 });
