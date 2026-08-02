@@ -1,6 +1,6 @@
 /**
  * CipherChat Application Controller (rrxcore edition)
- * Features: Telegram (Fast Cloud Messaging & Disk Store, Double Confirm Clear Chat, Delete For Me / Delete For Everyone, Unified 3-Dot/Right-Click Context Menu, Edit, Pin, Forward, Star, TTS, AI Assistant), WhatsApp (Stories, Disappearing Msgs), Discord (WebRTC Video 4K@60, 30Mbps Bitrate, Draggable PiP, 10 Voice FX)
+ * Features: Telegram (Fast Cloud Messaging & Disk Store, Double Confirm Clear Chat, Delete For Me / Delete For Everyone, Unified 3-Dot/Right-Click Context Menu, Edit, Pin, Forward, Star, TTS, AI Assistant), WhatsApp (Stories, Disappearing Msgs), Discord (WebRTC Video 4K@60, 30Mbps Bitrate, Voice-Channel Scoped Screen Share & Camera, Draggable PiP, 10 Voice FX)
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -833,6 +833,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           await createWebRTCOffer(p.socketId);
         }
       }
+      if (isScreenShareActive && localScreenStream) {
+        await broadcastWebRTCStream(localScreenStream, 'Screen Share');
+      }
+      if (isCameraActive && localVideoStream) {
+        await broadcastWebRTCStream(localVideoStream, 'Camera');
+      }
     });
 
     socket.on('voice_participants_updated', ({ channelId, participants }) => {
@@ -1131,14 +1137,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     voiceSettingsModal.classList.remove('active');
   });
 
-  // --- WEBRTC CAMERA & SCREEN SHARE CONTROLS WITH AUTOMATIC ROOM BROADCAST & 30Mbps BITRATE TUNING ---
+  // --- DISCORD VOICE CHANNEL SCOPED WEBRTC CAMERA & SCREEN SHARE ENGINE ---
 
   async function broadcastWebRTCStream(stream, labelPrefix) {
-    if (!stream) return;
+    if (!stream || !currentVoiceChannelId) return;
     const videoTrack = stream.getVideoTracks()[0];
     if (!videoTrack) return;
 
-    for (const [peerSocketId, peer] of peersMap.entries()) {
+    const activeVc = voiceChannelsData.find(c => c.id === currentVoiceChannelId);
+    if (!activeVc || !activeVc.participants) return;
+
+    const voicePeerIds = activeVc.participants
+      .map(p => p.socketId)
+      .filter(id => id !== socket?.id);
+
+    for (const peerSocketId of voicePeerIds) {
       let pc = peerConnections.get(peerSocketId);
       if (!pc) {
         pc = new RTCPeerConnection(iceConfiguration);
@@ -1190,6 +1203,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function startCameraStream() {
+    if (!currentVoiceChannelId) {
+      alert('🔊 Please join a Voice Channel (e.g., Lounge Voice) first to enable your Camera video stream.');
+      isCameraActive = false;
+      voiceCameraBtn.classList.remove('active');
+      return;
+    }
+
     const profile = videoQualityProfiles[selectedQualityKey];
     const mbpsStr = (selectedBitrateBps / 1000000).toFixed(0);
     try {
@@ -1216,6 +1236,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function startScreenShareStream() {
+    if (!currentVoiceChannelId) {
+      alert('🔊 Please join a Voice Channel (e.g., Lounge Voice) first to share your Screen.');
+      isScreenShareActive = false;
+      voiceScreenShareBtn.classList.remove('active');
+      return;
+    }
+
     const profile = videoQualityProfiles[selectedQualityKey];
     const mbpsStr = (selectedBitrateBps / 1000000).toFixed(0);
     try {
