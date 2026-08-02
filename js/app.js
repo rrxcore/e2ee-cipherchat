@@ -1131,7 +1131,63 @@ document.addEventListener('DOMContentLoaded', async () => {
     voiceSettingsModal.classList.remove('active');
   });
 
-  // --- WEBRTC CAMERA & SCREEN SHARE CONTROLS WITH 30Mbps BITRATE TUNING ---
+  // --- WEBRTC CAMERA & SCREEN SHARE CONTROLS WITH AUTOMATIC ROOM BROADCAST & 30Mbps BITRATE TUNING ---
+
+  async function broadcastWebRTCStream(stream, labelPrefix) {
+    if (!stream) return;
+    const videoTrack = stream.getVideoTracks()[0];
+    if (!videoTrack) return;
+
+    for (const [peerSocketId, peer] of peersMap.entries()) {
+      let pc = peerConnections.get(peerSocketId);
+      if (!pc) {
+        pc = new RTCPeerConnection(iceConfiguration);
+        peerConnections.set(peerSocketId, pc);
+
+        pc.onicecandidate = (event) => {
+          if (event.candidate && socket) {
+            socket.emit('webrtc_ice_candidate', { targetSocketId: peerSocketId, candidate: event.candidate });
+          }
+        };
+
+        pc.ontrack = (event) => {
+          const peerInfo = peersMap.get(peerSocketId);
+          const name = peerInfo ? peerInfo.username : 'Peer';
+          if (event.track.kind === 'video') {
+            addVideoCard(peerSocketId, `📹 ${name}'s Stream`, event.streams[0]);
+          } else {
+            playPeerAudioStream(peerSocketId, event.streams[0]);
+          }
+        };
+      }
+
+      const senders = pc.getSenders();
+      const existingSender = senders.find(s => s.track && s.track.kind === 'video');
+      if (existingSender) {
+        await existingSender.replaceTrack(videoTrack);
+      } else {
+        pc.addTrack(videoTrack, stream);
+      }
+
+      try {
+        const s = pc.getSenders().find(x => x.track && x.track.kind === 'video');
+        if (s && s.setParameters) {
+          const params = s.getParameters();
+          if (!params.encodings) params.encodings = [{}];
+          params.encodings[0].maxBitrate = selectedBitrateBps;
+          await s.setParameters(params);
+        }
+      } catch (e) {
+        console.warn('Bitrate tuning fallback:', e);
+      }
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      if (socket) {
+        socket.emit('webrtc_offer', { targetSocketId: peerSocketId, sdpOffer: offer });
+      }
+    }
+  }
 
   async function startCameraStream() {
     const profile = videoQualityProfiles[selectedQualityKey];
@@ -1151,28 +1207,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       voiceCameraBtn.classList.add('active');
       addVideoCard('my_cam', `${myUsername} (Camera ${selectedQualityKey.toUpperCase()} @ ${mbpsStr}Mbps)`, localVideoStream);
-
-      const videoTrack = localVideoStream.getVideoTracks()[0];
-      peerConnections.forEach(async (pc) => {
-        const videoSender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
-        if (videoSender) {
-          await videoSender.replaceTrack(videoTrack);
-        } else {
-          pc.addTrack(videoTrack, localVideoStream);
-        }
-        try {
-          const senders = pc.getSenders();
-          const s = senders.find(x => x.track && x.track.kind === 'video');
-          if (s && s.setParameters) {
-            const params = s.getParameters();
-            if (!params.encodings) params.encodings = [{}];
-            params.encodings[0].maxBitrate = selectedBitrateBps;
-            await s.setParameters(params);
-          }
-        } catch (e) {
-          console.warn('Bitrate tuning fallback:', e);
-        }
-      });
+      await broadcastWebRTCStream(localVideoStream, 'Camera');
 
       addSystemMessage(`📹 WebRTC Camera active at ${selectedQualityKey.toUpperCase()} (${profile.width}x${profile.height} @ ${profile.fps}FPS, ${mbpsStr}Mbps).`);
     } catch (err) {
@@ -1200,32 +1235,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       voiceScreenShareBtn.classList.add('active');
       addVideoCard('my_screen', `${myUsername} (Screen Share ${selectedQualityKey.toUpperCase()} @ ${mbpsStr}Mbps)`, localScreenStream);
-
-      const screenTrack = localScreenStream.getVideoTracks()[0];
-      peerConnections.forEach(async (pc) => {
-        const videoSender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
-        if (videoSender) {
-          await videoSender.replaceTrack(screenTrack);
-        } else {
-          pc.addTrack(screenTrack, localScreenStream);
-        }
-        try {
-          const senders = pc.getSenders();
-          const s = senders.find(x => x.track && x.track.kind === 'video');
-          if (s && s.setParameters) {
-            const params = s.getParameters();
-            if (!params.encodings) params.encodings = [{}];
-            params.encodings[0].maxBitrate = selectedBitrateBps;
-            await s.setParameters(params);
-          }
-        } catch (e) {
-          console.warn('Bitrate tuning fallback:', e);
-        }
-      });
+      await broadcastWebRTCStream(localScreenStream, 'Screen Share');
 
       addSystemMessage(`🖥️ WebRTC Screen Share active at ${selectedQualityKey.toUpperCase()} (${profile.width}x${profile.height} @ ${profile.fps}FPS, ${mbpsStr}Mbps).`);
 
-      screenTrack.onended = () => {
+      localScreenStream.getVideoTracks()[0].onended = () => {
         voiceScreenShareBtn.classList.remove('active');
         removeVideoCard('my_screen');
         isScreenShareActive = false;
@@ -1724,7 +1738,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     pc.ontrack = (event) => {
       if (event.track.kind === 'video') {
-        addVideoCard(targetSocketId, `Peer Video Stream`, event.streams[0]);
+        const peerInfo = peersMap.get(targetSocketId);
+        const name = peerInfo ? peerInfo.username : 'Peer';
+        addVideoCard(targetSocketId, `📹 ${name}'s Stream`, event.streams[0]);
       } else {
         playPeerAudioStream(targetSocketId, event.streams[0]);
       }
@@ -1740,8 +1756,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function handleWebRTCOffer(senderSocketId, sdpOffer) {
-    const pc = new RTCPeerConnection(iceConfiguration);
-    peerConnections.set(senderSocketId, pc);
+    let pc = peerConnections.get(senderSocketId);
+    if (!pc) {
+      pc = new RTCPeerConnection(iceConfiguration);
+      peerConnections.set(senderSocketId, pc);
+    }
 
     const activeStream = processedVoiceStream || localRawStream;
     if (activeStream) {
@@ -1759,7 +1778,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     pc.ontrack = (event) => {
       if (event.track.kind === 'video') {
-        addVideoCard(senderSocketId, `Peer Video Stream`, event.streams[0]);
+        const peerInfo = peersMap.get(senderSocketId);
+        const name = peerInfo ? peerInfo.username : 'Peer';
+        addVideoCard(senderSocketId, `📹 ${name}'s Stream`, event.streams[0]);
       } else {
         playPeerAudioStream(senderSocketId, event.streams[0]);
       }
