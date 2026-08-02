@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CipherChat | Discord E2EE Voice Edition</title>
+  <meta name="description" content="CipherChat rrxcore edition with Discord-Style E2EE Live Voice Channels and Web Crypto API.">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+
+  <!--  FROSTED GLASS NAVBAR -->
+  <header class="app-header" id="appHeader">
+    <div class="brand-container">
+      <div class="brand-logo">💬</div>
+      <div class="brand-text">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span class="brand-title">CipherChat</span>
+          <span class="brand-badge">rrxcore edition</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Floating Dynamic Island Indicator -->
+    <div class="dynamic-island-pill">
+      <div class="dynamic-island-dot"></div>
+      <span>🔒 E2EE Voice Channels Active • ECDH P-256</span>
+    </div>
+
+    <!-- Mode Controls -->
+    <div class="header-actions">
+      <div class="mode-toggle-group">
+        <button class="mode-btn active" id="modeTabBtn">🌐 Multi-Tab</button>
+        <button class="mode-btn" id="modeSimBtn">⚡ Simulator</button>
+      </div>
+
+      <button class="apple-btn" id="openSafetyBtn" title="Verify E2EE Safety Fingerprint">
+        🛡️ Safety
+      </button>
+
+      <button class="apple-btn btn-primary" id="openInspectorBtn" title="View Real-Time Server Wire Packets">
+        📡 Inspector
+      </button>
+    </div>
+  </header>
+
+  <!-- APP MAIN CONTAINER -->
+  <main class="app-container">
+
+    <!-- 1. HERO ROOM JOIN OVERLAY -->
+    <div class="room-join-overlay" id="roomJoinOverlay">
+      <div class="join-card">
+        <div style="font-size: 2.6rem; margin-bottom: 10px;">🔐</div>
+        <h2>Join Private Server</h2>
+        <p>Private keys are generated locally. Enter a room password to protect your server.</p>
+
+        <div id="joinErrorMessage" class="error-alert" style="display: none;"></div>
+
+        <form id="joinForm">
+          <div class="form-group">
+            <label for="usernameInput">Your Name / Alias</label>
+            <input type="text" id="usernameInput" class="apple-input" placeholder="e.g. Alex" required>
+          </div>
+
+          <div class="form-group">
+            <label for="roomCodeInput">Server Room Code</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="roomCodeInput" class="apple-input" placeholder="e.g. rrxcore-1" required>
+              <button type="button" class="apple-btn" id="generateRoomBtn" title="Generate Random Code">🎲</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="roomPasswordInput">Room Password (Optional / Required to Join)</label>
+            <input type="password" id="roomPasswordInput" class="apple-input" placeholder="Enter password...">
+          </div>
+
+          <button type="submit" class="apple-btn btn-primary btn-full">Enter Room & Voice Channels →</button>
+        </form>
+
+        <div class="crypto-specs-pill">
+          ⚡ rrxcore • Discord Voice Rooms • E2EE Mesh Stream • AES-256-GCM
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. SINGLE CHAT VIEW (DISCORD STYLE SIDEBAR) -->
+    <div class="single-chat-view" id="singleChatView">
+      <div class="chat-app-body">
+        <!-- Discord Style Sidebar -->
+        <aside class="chat-sidebar">
+          <div class="sidebar-header">
+            <span>DISCORD CHANNELS</span>
+            <span id="currentRoomLabel" class="room-badge-code">Room: --</span>
+          </div>
+
+          <div class="sidebar-scroll">
+            <!-- Text Channel Section -->
+            <div class="channel-section-title"># TEXT CHANNELS</div>
+            <div class="channel-item active">
+              <span># general-chat</span>
+            </div>
+
+            <!-- Voice Channel Section -->
+            <div class="channel-section-title" style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
+              <span>🔊 VOICE ROOMS</span>
+              <button type="button" id="createVoiceChannelBtn" style="background: none; border: none; color: var(--ios-green); cursor: pointer; font-size: 0.85rem;" title="Create Custom Voice Channel">➕</button>
+            </div>
+
+            <!-- Dynamic Voice Channels -->
+            <div id="voiceChannelList">
+              <!-- Rendered dynamically -->
+            </div>
+
+            <!-- Online Peers Section -->
+            <div class="channel-section-title" style="margin-top: 14px;">👥 ONLINE PEERS</div>
+            <div class="peer-list" id="peerList">
+              <!-- Dynamic Users -->
+            </div>
+          </div>
+
+          <!-- Discord Active Voice Control Bar (Bottom of Sidebar) -->
+          <div class="discord-voice-bar" id="discordVoiceBar" style="display: none;">
+            <div class="voice-status-info">
+              <div class="voice-connected-dot"></div>
+              <div>
+                <div style="font-size: 0.75rem; font-weight: 800; color: var(--ios-green);" id="activeVoiceChannelName">Voice Connected</div>
+                <div style="font-size: 0.68rem; color: var(--text-muted);">RTC / E2EE Stream</div>
+              </div>
+            </div>
+            <div class="voice-ctrl-btns">
+              <button type="button" class="voice-icon-btn" id="voiceMuteBtn" title="Toggle Mute">🎤</button>
+              <button type="button" class="voice-icon-btn" id="voiceDeafenBtn" title="Toggle Deafen">🎧</button>
+              <button type="button" class="voice-icon-btn disconnect-btn" id="voiceDisconnectBtn" title="Disconnect Voice">❌</button>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Main Chat Panel -->
+        <section class="chat-main">
+          <div class="chat-topbar">
+            <div>
+              <div class="chat-channel-title"># general-chat</div>
+              <div class="chat-channel-subtitle">Direct Web Crypto API E2EE Channel</div>
+            </div>
+            <div class="session-security-badge" id="securityBadge">
+              <span>🔒 256-Bit E2EE Active</span>
+            </div>
+          </div>
+
+          <!-- Messages Area -->
+          <div class="messages-area" id="messagesArea">
+            <div class="system-message">✨ Session initialized. Local ECDH keypair ready.</div>
+          </div>
+
+          <!-- Input Bar & Voice Recording System -->
+          <div class="chat-input-container">
+            <!-- Active Voice Recording Pill -->
+            <div class="voice-recording-pill" id="voiceRecordingPill" style="display: none;">
+              <div class="rec-dot"></div>
+              <span id="recordingTimer">Recording 00:00</span>
+              <div class="rec-actions">
+                <button type="button" class="apple-btn" id="cancelVoiceBtn" style="padding: 4px 10px; font-size: 0.75rem;">✕ Cancel</button>
+                <button type="button" class="apple-btn btn-primary" id="sendVoiceBtn" style="padding: 4px 12px; font-size: 0.75rem;">Send Voice Note 🔒</button>
+              </div>
+            </div>
+
+            <!-- Standard Chat Form -->
+            <form class="chat-input-bar" id="chatForm">
+              <label for="fileInput" class="apple-btn icon-btn" style="cursor: pointer;" title="Encrypt & Send File / Photo">
+                📎
+                <input type="file" id="fileInput" style="display: none;">
+              </label>
+
+              <button type="button" class="apple-btn icon-btn" id="micBtn" title="Record E2EE Voice Note">
+                🎙️
+              </button>
+
+              <input type="text" id="messageInput" class="chat-input" placeholder="Type a message..." autocomplete="off">
+              <button type="submit" class="apple-btn btn-primary">Send 🔒</button>
+            </form>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- 3. SPLIT SIMULATOR VIEW (ALICE & BOB) -->
+    <div class="split-simulator-view" id="splitSimView" style="display: none;">
+      <!-- Alice Pane -->
+      <div class="sim-pane">
+        <div class="sim-header">
+          <div class="sim-user-title">👩‍💻 Alice's Device</div>
+          <span class="sim-key-status">ECDH Active</span>
+        </div>
+        <div class="messages-area" id="simAliceMessages">
+          <div class="system-message">Alice's local device online.</div>
+        </div>
+        <form class="chat-input-bar" id="simAliceForm">
+          <input type="text" id="simAliceInput" class="chat-input" placeholder="Message Bob..." autocomplete="off">
+          <button type="submit" class="apple-btn btn-primary">Send</button>
+        </form>
+      </div>
+
+      <!-- Bob Pane -->
+      <div class="sim-pane">
+        <div class="sim-header">
+          <div class="sim-user-title">👨‍💻 Bob's Device</div>
+          <span class="sim-key-status">ECDH Active</span>
+        </div>
+        <div class="messages-area" id="simBobMessages">
+          <div class="system-message">Bob's local device online.</div>
+        </div>
+        <form class="chat-input-bar" id="simBobForm">
+          <input type="text" id="simBobInput" class="chat-input" placeholder="Message Alice..." autocomplete="off">
+          <button type="submit" class="apple-btn btn-primary">Send</button>
+        </form>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- 4. LIVE SERVER PACKET INSPECTOR DRAWER -->
+  <div class="inspector-drawer" id="inspectorDrawer">
+    <div class="inspector-header">
+      <div class="inspector-title">
+        <span>📡 Server Blind Relay Packet Stream</span>
+        <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 400;">(Server only holds ciphertexts & IVs)</span>
+      </div>
+      <button class="apple-btn" id="closeInspectorBtn" style="padding: 3px 10px; font-size: 0.75rem;">✕ Close</button>
+    </div>
+    <div class="packet-stream" id="packetStream">
+      <!-- Live Wire Packets -->
+    </div>
+  </div>
+
+  <!-- 5. SAFETY FINGERPRINT MODAL -->
+  <div class="modal-overlay" id="safetyModal">
+    <div class="safety-modal">
+      <button class="modal-close" id="closeSafetyBtn">✕</button>
+      <h3 style="font-size: 1.2rem; margin-bottom: 6px; font-weight: 800;">🛡️ Safety Fingerprint Matrix</h3>
+      <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.45;">
+        Compare this 60-digit matrix with your peer. Matching numbers guarantee 100% authenticated encryption against eavesdropping.
+      </p>
+
+      <div class="safety-matrix" id="safetyMatrixContainer">
+        <!-- Matrix Blocks -->
+      </div>
+
+      <div class="verification-status">
+        ✅ Authenticated via SHA-256 Public Key Agreement
+      </div>
+    </div>
+  </div>
+
+  <script src="js/crypto.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
