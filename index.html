@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CipherChat | Discord E2EE Voice Edition</title>
-  <meta name="description" content="CipherChat rrxcore edition with Discord-Style E2EE Live Voice Channels and Web Crypto API.">
+  <title>CipherChat | rrxcore edition</title>
+  <meta name="description" content="CipherChat rrxcore edition - Discord-Style E2EE Live Voice Channels and Web Crypto API.">
   <link rel="stylesheet" href="css/style.css">
-  <script src="/socket.io/socket.io.js"></script>
+  <!-- Load Socket.io via CDN so GitHub Pages never 404s -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body>
 
@@ -25,7 +26,7 @@
     <!-- Floating Dynamic Island Indicator -->
     <div class="dynamic-island-pill">
       <div class="dynamic-island-dot"></div>
-      <span>🔒 E2EE Voice Channels Active • ECDH P-256</span>
+      <span id="dynamicIslandText">🔒 E2EE Session Secured • ECDH P-256</span>
     </div>
 
     <!-- Mode Controls -->
@@ -76,7 +77,13 @@
             <input type="password" id="roomPasswordInput" class="apple-input" placeholder="Enter password...">
           </div>
 
-          <button type="submit" class="apple-btn btn-primary btn-full">Enter Room & Voice Channels →</button>
+          <!-- Relay Server Config for GitHub Pages -->
+          <div class="form-group" id="serverUrlGroup" style="display: none;">
+            <label for="serverUrlInput">Signaling Server URL (For GitHub Pages Multi-Device)</label>
+            <input type="text" id="serverUrlInput" class="apple-input" placeholder="http://localhost:3000 or https://your-server.onrender.com">
+          </div>
+
+          <button type="submit" class="apple-btn btn-primary btn-full" id="enterRoomBtn">Enter Room & Voice Channels →</button>
         </form>
 
         <div class="crypto-specs-pill">
@@ -120,7 +127,7 @@
             </div>
           </div>
 
-          <!-- Discord Active Voice Control Bar (Bottom of Sidebar) -->
+          <!-- Discord Active Voice Control Bar -->
           <div class="discord-voice-bar" id="discordVoiceBar" style="display: none;">
             <div class="voice-status-info">
               <div class="voice-connected-dot"></div>
