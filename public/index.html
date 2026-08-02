@@ -4,12 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CipherChat | rrxcore edition</title>
-  <meta name="description" content="CipherChat rrxcore edition - Discord-Style WebRTC Live Voice, Voice Changer & Web Crypto API.">
+  <meta name="description" content="CipherChat rrxcore edition - Unified WhatsApp, Telegram & Discord Features with Web Crypto E2EE.">
   <link rel="stylesheet" href="css/style.css">
-  <!-- Load Socket.io via CDN -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
-<body>
+<body data-theme="ios-dark">
 
   <!--  FROSTED GLASS NAVBAR -->
   <header class="app-header" id="appHeader">
@@ -26,11 +25,27 @@
     <!-- Floating Dynamic Island Indicator -->
     <div class="dynamic-island-pill">
       <div class="dynamic-island-dot"></div>
-      <span id="dynamicIslandText">🔒 E2EE Session Secured • WebRTC P2P Voice</span>
+      <span id="dynamicIslandText">🔒 256-Bit E2EE Active</span>
     </div>
 
-    <!-- Mode Controls -->
+    <!-- Mode & Feature Controls -->
     <div class="header-actions">
+      <button class="apple-btn" id="openStatusBtn" title="WhatsApp 24h Encrypted Stories">
+        📸 Stories
+      </button>
+
+      <button class="apple-btn" id="openDisappearingBtn" title="Disappearing Messages Timer">
+        ⏱️ <span id="activeTimerLabel">Timer: Off</span>
+      </button>
+
+      <button class="apple-btn" id="openThemeBtn" title="Theme Selector">
+        🎨 Theme
+      </button>
+
+      <button class="apple-btn" id="openClearChatBtn" title="Clear Chat History (Me / Both Users)" style="background: rgba(255, 45, 85, 0.18); border-color: rgba(255, 45, 85, 0.35); color: var(--ios-pink);">
+        🧹 Clear Chat
+      </button>
+
       <div class="mode-toggle-group">
         <button class="mode-btn active" id="modeTabBtn">🌐 Multi-Tab</button>
         <button class="mode-btn" id="modeSimBtn">⚡ Simulator</button>
@@ -81,9 +96,9 @@
             <input type="password" id="roomPasswordInput" class="apple-input" placeholder="Enter password...">
           </div>
 
-          <!-- Relay Server Config -->
-          <div class="form-group" id="serverUrlGroup" style="display: none;">
-            <label for="serverUrlInput">Signaling Server URL (For GitHub Pages Multi-Device)</label>
+          <!-- Signaling Server URL Option -->
+          <div class="form-group" id="serverUrlGroup">
+            <label for="serverUrlInput">Signaling Server URL (For Custom / Hosted Relay)</label>
             <input type="text" id="serverUrlInput" class="apple-input" placeholder="http://localhost:3000 or https://your-server.onrender.com">
           </div>
 
@@ -91,31 +106,45 @@
         </form>
 
         <div class="crypto-specs-pill">
-          ⚡ rrxcore • WebRTC Voice • 10 Voice Changer FX • Device Selectors
+          ⚡ rrxcore • Delete For Me / Delete For Everyone
         </div>
       </div>
     </div>
 
-    <!-- 2. SINGLE CHAT VIEW (DISCORD STYLE SIDEBAR) -->
+    <!-- 2. SINGLE CHAT VIEW -->
     <div class="single-chat-view" id="singleChatView">
       <div class="chat-app-body">
-        <!-- Discord Style Sidebar -->
-        <aside class="chat-sidebar">
+        <!-- Expandable & Resizable Sidebar -->
+        <aside class="chat-sidebar" id="chatSidebar">
+          <!-- Interactive Drag Resizer Handle -->
+          <div class="sidebar-resizer" id="sidebarResizer" title="Drag to Resize Sidebar Width"></div>
+
           <div class="sidebar-header">
-            <span>DISCORD CHANNELS</span>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span>DISCORD / TELEGRAM CHANNELS</span>
+              <button type="button" id="toggleSidebarWidthBtn" style="background: rgba(255,255,255,0.1); border: none; color: #fff; cursor: pointer; font-size: 0.75rem; padding: 2px 6px; border-radius: 4px;" title="Expand / Shrink Sidebar Width">↔️ Resize</button>
+            </div>
             <span id="currentRoomLabel" class="room-badge-code">Room: --</span>
           </div>
 
           <div class="sidebar-scroll">
             <!-- Text Channel Section -->
-            <div class="channel-section-title"># TEXT CHANNELS</div>
-            <div class="channel-item active">
-              <span># general-chat</span>
+            <div class="channel-section-title" style="display: flex; justify-content: space-between; align-items: center;">
+              <span># TEXT CHANNELS</span>
+              <button type="button" id="createTextChannelBtn" style="background: none; border: none; color: var(--ios-blue); cursor: pointer; font-size: 0.9rem;" title="Create Text Channel">➕</button>
+            </div>
+            <div id="textChannelList">
+              <div class="channel-item active" data-channel="general-chat">
+                <span># general-chat</span>
+              </div>
+              <div class="channel-item" data-channel="announcements">
+                <span># announcements</span>
+              </div>
             </div>
 
             <!-- Voice Channel Section -->
             <div class="channel-section-title" style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
-              <span>🔊 VOICE ROOMS</span>
+              <span>🔊 VOICE & VIDEO ROOMS</span>
               <button type="button" id="createVoiceChannelBtn" style="background: none; border: none; color: var(--ios-green); cursor: pointer; font-size: 0.9rem;" title="Create Custom Voice Channel">➕</button>
             </div>
 
@@ -131,7 +160,7 @@
             </div>
           </div>
 
-          <!-- Discord Active Voice Control Bar -->
+          <!-- Discord Active Voice & Video Control Bar -->
           <div class="discord-voice-bar" id="discordVoiceBar" style="display: none;">
             <div class="voice-status-info">
               <div class="voice-connected-dot"></div>
@@ -143,31 +172,96 @@
             <div class="voice-ctrl-btns">
               <button type="button" class="voice-icon-btn" id="voiceMuteBtn" title="Toggle Mute">🎤</button>
               <button type="button" class="voice-icon-btn" id="voiceDeafenBtn" title="Toggle Deafen">🎧</button>
+              <button type="button" class="voice-icon-btn" id="voiceCameraBtn" title="Toggle WebRTC Video Camera">📹</button>
+              <button type="button" class="voice-icon-btn" id="voiceScreenShareBtn" title="Share Screen">🖥️</button>
               <button type="button" class="voice-icon-btn" id="openVoiceFXBtn" title="Voice Changer FX">🎭</button>
               <button type="button" class="voice-icon-btn disconnect-btn" id="voiceDisconnectBtn" title="Disconnect Voice">❌</button>
             </div>
           </div>
         </aside>
 
-        <!-- Main Chat Panel -->
+        <!-- Main Chat & Video Call Panel -->
         <section class="chat-main">
           <div class="chat-topbar">
             <div>
-              <div class="chat-channel-title"># general-chat</div>
+              <div class="chat-channel-title" id="activeChannelHeader"># general-chat</div>
               <div class="chat-channel-subtitle">Direct Web Crypto API E2EE Channel</div>
             </div>
-            <div class="session-security-badge" id="securityBadge">
-              <span>🔒 256-Bit E2EE Active</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div class="session-security-badge" id="disappearingBadge" style="display: none; background: rgba(255, 149, 0, 0.15); border-color: var(--ios-orange); color: var(--ios-orange);">
+                ⏱️ Disappearing: <span id="badgeTimerText">Off</span>
+              </div>
+              <div class="session-security-badge" id="securityBadge">
+                <span>🔒 256-Bit E2EE Active</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Telegram Pinned Message Banner -->
+          <div class="pinned-message-bar" id="pinnedMessageBar" style="display: none;">
+            <div style="display: flex; align-items: center; gap: 8px; flex: 1; overflow: hidden;">
+              <span style="font-size: 0.9rem;">📌</span>
+              <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                <strong id="pinnedSender" style="color: var(--ios-cyan); font-size: 0.78rem;">Pinned:</strong>
+                <span id="pinnedText" style="color: var(--text-muted); font-size: 0.78rem;">...</span>
+              </div>
+            </div>
+            <button type="button" class="apple-btn" id="unpinBtn" style="padding: 2px 8px; font-size: 0.72rem;">✕ Unpin</button>
+          </div>
+
+          <!-- WebRTC Video & Screen Share Grid Bar with Expand & Shrink View Controls -->
+          <div class="video-grid-wrapper" id="videoGridWrapper" style="display: none;">
+            <div class="video-grid-header">
+              <span style="font-size: 0.76rem; font-weight: 800; color: var(--ios-cyan);">📹 WebRTC Stream Grid</span>
+              <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                <label for="videoQualitySelect" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">Quality:</label>
+                <select id="videoQualitySelect" class="apple-input" style="padding: 2px 6px; font-size: 0.72rem; width: 140px; background: rgba(0,0,0,0.6);">
+                  <option value="4k">✨ 4K @ 60 FPS</option>
+                  <option value="2k">💎 1440p @ 60 FPS</option>
+                  <option value="1080p" selected>🎬 1080p @ 60 FPS</option>
+                  <option value="720p">📱 720p @ 30 FPS</option>
+                </select>
+
+                <label for="videoBitrateSelect" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">Bitrate:</label>
+                <select id="videoBitrateSelect" class="apple-input" style="padding: 2px 6px; font-size: 0.72rem; width: 150px; background: rgba(0,0,0,0.6);">
+                  <option value="30000000">🚀 30 Mbps (Extreme)</option>
+                  <option value="25000000">⚡ 25 Mbps (Ultra)</option>
+                  <option value="20000000">🔥 20 Mbps (Super Clear)</option>
+                  <option value="16000000" selected>⚡ 16 Mbps (Default)</option>
+                  <option value="12000000">💎 12 Mbps (Standard)</option>
+                  <option value="8000000">🎬 8 Mbps (1080p)</option>
+                  <option value="4000000">📱 4 Mbps (Balanced)</option>
+                </select>
+
+                <!-- Shrink & Expand View Mode Buttons -->
+                <div class="view-mode-btn-group" style="display: flex; gap: 4px; margin-left: 4px;">
+                  <button type="button" class="apple-btn" id="viewModePipBtn" style="padding: 2px 8px; font-size: 0.72rem;" title="Shrink into Floating Picture-in-Picture Card">📱 Floating PiP</button>
+                  <button type="button" class="apple-btn active-mode" id="viewModeCompactBtn" style="padding: 2px 8px; font-size: 0.72rem;" title="Standard Compact Topbar View">🎬 Compact</button>
+                  <button type="button" class="apple-btn" id="viewModeTheaterBtn" style="padding: 2px 8px; font-size: 0.72rem;" title="Expanded Theater View">📺 Theater</button>
+                </div>
+              </div>
+            </div>
+            <div class="video-grid mode-compact" id="videoGridContainer">
+              <!-- Dynamic WebRTC Video Cards -->
             </div>
           </div>
 
           <!-- Messages Area -->
           <div class="messages-area" id="messagesArea">
-            <div class="system-message">✨ Session initialized. WebRTC Voice Engine & Keypair ready.</div>
+            <div class="system-message">✨ Session initialized. WebRTC 4K@60 Video, Up to 30Mbps Bitrate Screen Share & E2EE ready.</div>
           </div>
 
-          <!-- Input Bar & Voice Recording System -->
+          <!-- Input Bar, Quoted Reply Bar & Voice Recording System -->
           <div class="chat-input-container">
+            <!-- Quoted Reply Bar -->
+            <div class="reply-preview-bar" id="replyPreviewBar" style="display: none;">
+              <div style="flex: 1; overflow: hidden;">
+                <div style="font-size: 0.72rem; font-weight: 800; color: var(--ios-blue);" id="replyTargetSender">Replying to...</div>
+                <div style="font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="replyTargetText">Text snippet...</div>
+              </div>
+              <button type="button" class="apple-btn" id="cancelReplyBtn" style="padding: 2px 8px; font-size: 0.72rem;">✕ Cancel</button>
+            </div>
+
             <!-- Active Voice Recording Pill -->
             <div class="voice-recording-pill" id="voiceRecordingPill" style="display: none;">
               <div class="rec-dot"></div>
@@ -232,7 +326,141 @@
 
   </main>
 
-  <!-- 4. VOICE & HARDWARE SETTINGS MODAL -->
+  <!-- 4. SINGLE MESSAGE DELETE MODAL (DELETE FOR ME / DELETE FOR EVERYONE) -->
+  <div class="modal-overlay" id="singleMsgDeleteModal">
+    <div class="safety-modal" style="max-width: 440px; text-align: center;">
+      <button class="modal-close" id="closeSingleMsgDeleteBtn">✕</button>
+      <div style="font-size: 2.6rem; margin-bottom: 8px;">🗑️</div>
+      <h3 style="font-size: 1.2rem; font-weight: 800; color: #fff;">Delete Message</h3>
+      <p style="font-size: 0.84rem; color: var(--text-muted); margin-top: 4px;">
+        Choose whether to delete this message for yourself only or for everyone.
+      </p>
+
+      <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 18px;">
+        <button type="button" class="apple-btn btn-full" id="deleteForMeBtn" style="background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.25);">
+          👤 Delete For Me
+        </button>
+
+        <button type="button" class="apple-btn btn-full" id="deleteForEveryoneBtn" style="background: rgba(255, 45, 85, 0.25); border-color: var(--ios-pink); color: #fff;">
+          👥 Delete For Everyone
+        </button>
+
+        <button type="button" class="apple-btn btn-full" id="cancelSingleMsgDeleteBtn" style="background: transparent; border: none; color: var(--text-muted);">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. DOUBLE CONFIRMATION CLEAR CHAT HISTORY MODAL -->
+  <div class="modal-overlay" id="clearChatModal">
+    <div class="safety-modal" style="max-width: 480px; text-align: center;">
+      <button class="modal-close" id="closeClearChatBtn">✕</button>
+      <div style="font-size: 2.8rem; margin-bottom: 8px;">🧹</div>
+      <h3 style="font-size: 1.25rem; font-weight: 800; color: #fff;">Clear Chat History</h3>
+      <p style="font-size: 0.84rem; color: var(--text-muted); margin-top: 6px; line-height: 1.45;">
+        Select your clear scope. Double confirmation is required before history is erased.
+      </p>
+
+      <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 20px;">
+        <button type="button" class="apple-btn btn-full" id="clearSingleUserBtn" style="background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.25);">
+          👤 Clear For Me Only (Single User)
+        </button>
+
+        <button type="button" class="apple-btn btn-full" id="clearBothUsersBtn" style="background: rgba(255, 45, 85, 0.25); border-color: var(--ios-pink); color: #fff;">
+          👥 Clear For Both Users (Everyone in Room)
+        </button>
+
+        <button type="button" class="apple-btn btn-full" id="cancelClearChatBtn" style="background: transparent; border: none; color: var(--text-muted);">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. FULL-SCREEN CINEMA / STAGE VIEW MODAL FOR CAMERA & SCREEN SHARE -->
+  <div class="modal-overlay" id="videoStageModal">
+    <div class="video-stage-content">
+      <div class="stage-header">
+        <span id="videoStageTitle" style="font-weight: 800; font-size: 1rem; color: #fff;">📹 Stream Fullscreen View</span>
+        <button class="modal-close" id="closeVideoStageBtn">✕ Close Stage</button>
+      </div>
+      <div class="stage-video-wrapper">
+        <video id="stageVideoElement" autoplay playsinline muted></video>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. STATUS STORIES MODAL -->
+  <div class="modal-overlay" id="statusModal">
+    <div class="safety-modal" style="max-width: 540px;">
+      <button class="modal-close" id="closeStatusBtn">✕</button>
+      <h3 style="font-size: 1.2rem; margin-bottom: 6px; font-weight: 800;">📸 24-Hour Encrypted Status Stories</h3>
+      <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.45;">
+        Post text or photo stories that automatically expire after 24 hours.
+      </p>
+
+      <form id="postStatusForm" style="margin: 16px 0; display: flex; gap: 8px;">
+        <input type="text" id="statusTextInput" class="apple-input" placeholder="Share a status update..." style="flex: 1;" required>
+        <button type="submit" class="apple-btn btn-primary">Post Story 🚀</button>
+      </form>
+
+      <div class="status-story-list" id="statusStoryListContainer">
+        <!-- Rendered stories -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 8. DISAPPEARING MESSAGES MODAL -->
+  <div class="modal-overlay" id="disappearingModal">
+    <div class="safety-modal" style="max-width: 440px;">
+      <button class="modal-close" id="closeDisappearingBtn">✕</button>
+      <h3 style="font-size: 1.2rem; margin-bottom: 6px; font-weight: 800;">⏱️ Disappearing Messages Timer</h3>
+      <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.45;">
+        Messages sent while enabled will automatically self-destruct after the selected duration.
+      </p>
+
+      <div class="timer-options-grid" id="timerOptionsGrid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px;">
+        <button class="timer-option-btn active" data-seconds="0">Off</button>
+        <button class="timer-option-btn" data-seconds="10">10 Seconds</button>
+        <button class="timer-option-btn" data-seconds="60">1 Minute</button>
+        <button class="timer-option-btn" data-seconds="3600">1 Hour</button>
+        <button class="timer-option-btn" data-seconds="86400">24 Hours</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 9. THEMES MODAL -->
+  <div class="modal-overlay" id="themeModal">
+    <div class="safety-modal" style="max-width: 440px;">
+      <button class="modal-close" id="closeThemeBtn">✕</button>
+      <h3 style="font-size: 1.2rem; margin-bottom: 6px; font-weight: 800;">🎨 Select Custom UI Theme</h3>
+      <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.45;">
+        Customize the application look and feel.
+      </p>
+
+      <div class="theme-grid" id="themeGridContainer" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px;">
+        <button class="theme-card active" data-theme="ios-dark">
+          <span style="font-size: 1.2rem;"></span>
+          <strong>iOS 18 Liquid Glass</strong>
+        </button>
+        <button class="theme-card" data-theme="cyberpunk-neon">
+          <span style="font-size: 1.2rem;">⚡</span>
+          <strong>Cyberpunk Neon</strong>
+        </button>
+        <button class="theme-card" data-theme="emerald-matrix">
+          <span style="font-size: 1.2rem;">🟢</span>
+          <strong>Emerald Matrix</strong>
+        </button>
+        <button class="theme-card" data-theme="cobalt-blue">
+          <span style="font-size: 1.2rem;">🌊</span>
+          <strong>Cobalt Deep Blue</strong>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 10. VOICE & HARDWARE SETTINGS MODAL -->
   <div class="modal-overlay" id="voiceSettingsModal">
     <div class="safety-modal" style="max-width: 520px;">
       <button class="modal-close" id="closeVoiceSettingsBtn">✕</button>
@@ -261,7 +489,7 @@
     </div>
   </div>
 
-  <!-- 5. REAL-TIME VOICE CHANGER & FX MODAL (10 FX + CUSTOM FX) -->
+  <!-- 11. REAL-TIME VOICE CHANGER & FX MODAL -->
   <div class="modal-overlay" id="voiceFXModal">
     <div class="safety-modal" style="max-width: 560px;">
       <button class="modal-close" id="closeVoiceFXBtn">✕</button>
@@ -270,7 +498,6 @@
         Select a real-time Web Audio DSP voice filter or add custom voice effects.
       </p>
 
-      <!-- 10 Voice FX Grid -->
       <div class="fx-grid" id="fxGridContainer">
         <button class="fx-card active" data-fx="normal">
           <span style="font-size: 1.4rem;">🎙️</span>
@@ -324,7 +551,6 @@
         </button>
       </div>
 
-      <!-- Add Custom Voice Effect Form -->
       <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.12);">
         <h4 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 8px;">➕ Add Custom Voice Effect</h4>
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -342,13 +568,13 @@
     </div>
   </div>
 
-  <!-- 6. CREATE VOICE CHANNEL MODAL -->
+  <!-- 12. CREATE VOICE CHANNEL MODAL -->
   <div class="modal-overlay" id="createVoiceModal">
     <div class="safety-modal" style="max-width: 400px;">
       <button class="modal-close" id="closeCreateVoiceBtn">✕</button>
       <h3 style="font-size: 1.2rem; margin-bottom: 6px; font-weight: 800;">➕ Create New Voice Room</h3>
       <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.45;">
-        Create a new Discord-style voice channel for your room.
+        Create a new Discord-style voice channel.
       </p>
 
       <form id="createVoiceForm" style="margin-top: 16px;">
@@ -361,7 +587,26 @@
     </div>
   </div>
 
-  <!-- 7. LIVE SERVER PACKET INSPECTOR DRAWER -->
+  <!-- 13. CREATE TEXT CHANNEL MODAL -->
+  <div class="modal-overlay" id="createTextModal">
+    <div class="safety-modal" style="max-width: 400px;">
+      <button class="modal-close" id="closeCreateTextBtn">✕</button>
+      <h3 style="font-size: 1.2rem; margin-bottom: 6px; font-weight: 800;">➕ Create Text Channel</h3>
+      <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.45;">
+        Add a new text channel to your server.
+      </p>
+
+      <form id="createTextForm" style="margin-top: 16px;">
+        <div class="form-group">
+          <label for="newTextChannelNameInput">Channel Name</label>
+          <input type="text" id="newTextChannelNameInput" class="apple-input" placeholder="e.g. announcements" required>
+        </div>
+        <button type="submit" class="apple-btn btn-primary btn-full">Create Text Channel #</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 14. LIVE SERVER PACKET INSPECTOR DRAWER -->
   <div class="inspector-drawer" id="inspectorDrawer">
     <div class="inspector-header">
       <div class="inspector-title">
@@ -375,7 +620,7 @@
     </div>
   </div>
 
-  <!-- 8. SAFETY FINGERPRINT MODAL -->
+  <!-- 15. SAFETY FINGERPRINT MODAL -->
   <div class="modal-overlay" id="safetyModal">
     <div class="safety-modal">
       <button class="modal-close" id="closeSafetyBtn">✕</button>

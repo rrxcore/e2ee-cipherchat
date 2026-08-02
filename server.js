@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -17,9 +18,56 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Room store: roomCode -> Map(socketId -> { username, publicKey })
-const rooms = new Map();
-const roomPasswords = new Map();
+// Persistent Telegram Cloud Database File Setup
+const dataDir = path.join(__dirname, 'data');
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+const dbFilePath = path.join(dataDir, 'cloud_db.json');
+
+// Room stores
+const rooms = new Map(); // Active socket sessions per room
+const roomPasswords = new Map(); // Room passwords (Persisted)
+const roomHistories = new Map(); // Telegram Cloud Messages array (Persisted)
+
+// Load Cloud DB on startup
+function loadCloudDb() {
+  try {
+    if (fs.existsSync(dbFilePath)) {
+      const raw = fs.readFileSync(dbFilePath, 'utf8');
+      const data = JSON.parse(raw);
+
+      if (data.passwords) {
+        Object.entries(data.passwords).forEach(([room, pass]) => {
+          roomPasswords.set(room, pass);
+        });
+      }
+
+      if (data.histories) {
+        Object.entries(data.histories).forEach(([room, msgs]) => {
+          roomHistories.set(room, msgs);
+        });
+      }
+      console.log(`☁️ Persistent Telegram Cloud DB loaded: ${roomHistories.size} active rooms in cloud store.`);
+    }
+  } catch (err) {
+    console.warn('⚠️ Cloud DB load fallback:', err);
+  }
+}
+
+// Save Cloud DB to disk
+function saveCloudDb() {
+  try {
+    const passwordsObj = Object.fromEntries(roomPasswords.entries());
+    const historiesObj = Object.fromEntries(roomHistories.entries());
+    const payload = JSON.stringify({ passwords: passwordsObj, histories: historiesObj }, null, 2);
+    fs.writeFileSync(dbFilePath, payload, 'utf8');
+  } catch (err) {
+    console.warn('⚠️ Cloud DB save error:', err);
+  }
+}
+
+loadCloudDb();
 
 // Discord Voice Channels store: roomCode -> Map(channelId -> Map(socketId -> { username, isMuted, isSpeaking }))
 const voiceChannels = new Map();
@@ -44,10 +92,20 @@ function addPacketLog(roomCode, packet) {
   if (logs.length > 50) logs.shift();
 }
 
+function addCloudMessage(roomCode, payload) {
+  if (!roomHistories.has(roomCode)) {
+    roomHistories.set(roomCode, []);
+  }
+  const history = roomHistories.get(roomCode);
+  history.push(payload);
+  if (history.length > 300) history.shift();
+  saveCloudDb();
+}
+
 io.on('connection', (socket) => {
   console.log(`[Socket Connected] ID: ${socket.id}`);
 
-  // Join Room
+  // Join Room with Password & Telegram Fast Cloud Messaging Recovery
   socket.on('join_room', ({ roomCode, username, publicKey, roomPassword }) => {
     if (roomPasswords.has(roomCode)) {
       const storedPass = roomPasswords.get(roomCode);
@@ -57,6 +115,7 @@ io.on('connection', (socket) => {
     } else {
       if (roomPassword) {
         roomPasswords.set(roomCode, roomPassword);
+        saveCloudDb();
       }
     }
 
@@ -92,10 +151,34 @@ io.on('connection', (socket) => {
       peers: existingUsers,
       recentPackets: packetLogs.get(roomCode) || [],
       isPasswordProtected: roomPasswords.has(roomCode),
-      voiceChannels: roomVoiceChannels
+      voiceChannels: roomVoiceChannels,
+      cloudHistory: roomHistories.get(roomCode) || []
     });
 
     socket.to(roomCode).emit('peer_joined', userSession);
+  });
+
+  // Clear Room Cloud History for Both Users
+  socket.on('clear_room_history', ({ roomCode }) => {
+    if (roomCode) {
+      roomHistories.set(roomCode, []);
+      saveCloudDb();
+      io.to(roomCode).emit('room_history_cleared', { roomCode });
+      console.log(`[Cloud DB] History for room '${roomCode}' cleared by user.`);
+    }
+  });
+
+  // Delete single message for everyone
+  socket.on('delete_single_message', ({ roomCode, messageId }) => {
+    if (roomCode && messageId) {
+      if (roomHistories.has(roomCode)) {
+        const msgs = roomHistories.get(roomCode).filter(m => m.id !== messageId);
+        roomHistories.set(roomCode, msgs);
+        saveCloudDb();
+      }
+      io.to(roomCode).emit('message_deleted_for_everyone', { messageId });
+      console.log(`[Cloud DB] Single message '${messageId}' deleted for everyone in room '${roomCode}'.`);
+    }
   });
 
   // Share Public Keys
@@ -152,7 +235,6 @@ io.on('connection', (socket) => {
       isSpeaking: false
     };
 
-    // Notify new user of existing voice participants in channel so WebRTC offers can be initiated
     const existingParticipants = Array.from(channel.participants.values());
     socket.emit('voice_channel_joined', {
       channelId,
@@ -236,14 +318,15 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Encrypted Payload Relay (Text, File, Photo, Voice Note)
-  socket.on('send_encrypted_payload', ({ roomCode, recipientSocketId, ciphertext, iv, salt, payloadType, fileName, fileSize, audioDuration, isImage }) => {
+  // Encrypted Payload Relay & Telegram Fast Cloud Messaging Persistence
+  socket.on('send_encrypted_payload', ({ roomCode, recipientSocketId, ciphertext, iv, salt, payloadType, fileName, fileSize, audioDuration, isImage, timerSeconds, messageId, plaintextFallback }) => {
     const room = rooms.get(roomCode);
     const sender = room?.get(socket.id);
 
     if (!sender) return;
 
     const payload = {
+      id: messageId || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
       senderSocketId: socket.id,
       senderUsername: sender.username,
       ciphertext,
@@ -254,6 +337,8 @@ io.on('connection', (socket) => {
       fileSize: fileSize || null,
       audioDuration: audioDuration || null,
       isImage: isImage || false,
+      timerSeconds: timerSeconds || 0,
+      plaintextFallback: plaintextFallback || null,
       timestamp: new Date().toLocaleTimeString()
     };
 
@@ -261,6 +346,11 @@ io.on('connection', (socket) => {
       socket.to(recipientSocketId).emit('receive_encrypted_payload', payload);
     } else {
       socket.to(roomCode).emit('receive_encrypted_payload', payload);
+    }
+
+    // Persist to Telegram Fast Cloud Store if not disappearing
+    if (!timerSeconds || timerSeconds === 0) {
+      addCloudMessage(roomCode, payload);
     }
 
     const inspectPacket = {
@@ -271,7 +361,7 @@ io.on('connection', (socket) => {
       timestamp: payload.timestamp,
       payloadSize: ciphertext.length,
       rawContent: {
-        serverStatus: 'BLIND_RELAY_NO_PLAINTEXT',
+        serverStatus: 'TELEGRAM_CLOUD_SAVED_E2EE',
         ciphertextSnippet: `${ciphertext.substring(0, 32)}...[${ciphertext.length} bytes]`,
         ivHex: iv,
         payloadType: payload.payloadType,
@@ -295,9 +385,6 @@ io.on('connection', (socket) => {
 
       if (room.size === 0) {
         rooms.delete(roomCode);
-        roomPasswords.delete(roomCode);
-        voiceChannels.delete(roomCode);
-        packetLogs.delete(roomCode);
       } else {
         socket.to(roomCode).emit('peer_left', { socketId: socket.id, username: user?.username });
       }
