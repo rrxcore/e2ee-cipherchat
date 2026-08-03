@@ -98,9 +98,9 @@
 
           <!-- Signaling Server URL Option -->
           <div class="form-group" id="serverUrlGroup">
-            <label for="serverUrlInput">Signaling Server URL (For Custom / Mobile-to-PC Relay)</label>
-            <input type="text" id="serverUrlInput" class="apple-input" placeholder="http://localhost:3000 or http://192.168.1.5:3000">
-            <small style="color: var(--ios-cyan); font-size: 0.72rem; display: block; margin-top: 4px;">📱 Mobile to PC: Enter PC's IP address (e.g. http://192.168.X.X:3000) or hosted backend URL.</small>
+            <label for="serverUrlInput">Signaling Server URL (Online Cloud Relay)</label>
+            <input type="text" id="serverUrlInput" class="apple-input" placeholder="https://e2ee-cipherchat.onrender.com" value="https://e2ee-cipherchat.onrender.com">
+            <small style="color: var(--ios-cyan); font-size: 0.72rem; display: block; margin-top: 4px;">🌐 Live Online Backend: Auto-connected to Render cloud relay (Work 600km+ away!).</small>
           </div>
 
           <button type="submit" class="apple-btn btn-primary btn-full" id="enterRoomBtn">Enter Room & Voice Channels →</button>
