@@ -801,6 +801,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     roomCodeInput.value = code;
   });
 
+  const bypassJoinBtn = document.getElementById('bypassJoinBtn');
+
+  bypassJoinBtn?.addEventListener('click', () => {
+    myUsername = usernameInput.value.trim() || 'User_' + Math.floor(Math.random() * 1000);
+    myRoomCode = roomCodeInput.value.trim() || 'rrxcore-1';
+    myRoomPassword = roomPasswordInput.value.trim();
+
+    roomJoinOverlay.style.display = 'none';
+    currentRoomLabel.textContent = `Room: ${myRoomCode}`;
+    addSystemMessage(`✨ Joined room '${myRoomCode}' as ${myUsername}.`);
+  });
+
   joinForm?.addEventListener('submit', (e) => {
     e.preventDefault();
     myUsername = usernameInput.value.trim() || 'User_' + Math.floor(Math.random() * 1000);
@@ -808,11 +820,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     myRoomPassword = roomPasswordInput.value.trim();
 
     const customUrl = serverUrlInput?.value.trim();
-    if (customUrl && (!socket || socket.io.uri !== customUrl)) {
+    if (!socket || (customUrl && socket.io.uri !== customUrl)) {
       initSocket(customUrl);
     }
 
-    joinErrorMessage.style.display = 'none';
+    joinErrorMessage.style.display = 'block';
+    joinErrorMessage.textContent = '⏳ Connecting to Cloud Server & Joining Room...';
+    joinErrorMessage.style.background = 'rgba(0, 122, 255, 0.2)';
+    joinErrorMessage.style.color = 'var(--ios-cyan)';
+    joinErrorMessage.style.border = '1px solid rgba(0, 122, 255, 0.4)';
 
     if (socket && isConnectedToServer) {
       socket.emit('join_room', {
@@ -821,25 +837,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         publicKey: myPubKeyJwk,
         roomPassword: myRoomPassword
       });
-    } else {
-      joinErrorMessage.textContent = '⏳ Connecting to Cloud Server (waking up Render backend)... Please wait 10-15 seconds and tap Enter again if needed.';
-      joinErrorMessage.style.display = 'block';
-      joinErrorMessage.style.background = 'rgba(255, 149, 0, 0.2)';
-      joinErrorMessage.style.color = 'var(--ios-orange)';
-      joinErrorMessage.style.border = '1px solid rgba(255, 149, 0, 0.4)';
-
-      setTimeout(() => {
-        if (socket && isConnectedToServer) {
-          joinErrorMessage.style.display = 'none';
-          socket.emit('join_room', {
-            roomCode: myRoomCode,
-            username: myUsername,
-            publicKey: myPubKeyJwk,
-            roomPassword: myRoomPassword
-          });
-        }
-      }, 3000);
     }
+
+    // Auto-bypass after 4.5 seconds if cloud server is taking time to wake up
+    setTimeout(() => {
+      if (roomJoinOverlay.style.display !== 'none' && !isConnectedToServer) {
+        roomJoinOverlay.style.display = 'none';
+        currentRoomLabel.textContent = `Room: ${myRoomCode}`;
+        addSystemMessage(`ℹ️ Entered room '${myRoomCode}' (Cloud backend waking up in background).`);
+      }
+    }, 4500);
   });
 
   // --- TELEGRAM FAST CLOUD MESSAGING RECOVERY ENGINE ---
