@@ -593,20 +593,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const isGitHubPages = window.location.hostname.includes('github.io');
       const connectTarget = targetUrl || (isGitHubPages ? 'https://e2ee-cipherchat.onrender.com' : window.location.origin);
+      
+      console.log(' Connecting to signaling server:', connectTarget);
+      
       socket = io(connectTarget, {
-        timeout: 4000,
+        timeout: 30000,
         reconnection: true,
-        reconnectionAttempts: 3
+        reconnectionAttempts: 15,
+        reconnectionDelay: 1500,
+        transports: ['websocket', 'polling']
       });
 
       socket.on('connect', () => {
         isConnectedToServer = true;
         console.log('🟢 Socket connected to server:', socket.id);
+        const serverBadge = document.getElementById('serverStatusBadge');
+        if (serverBadge) {
+          serverBadge.style.display = 'inline-block';
+          serverBadge.textContent = '🟢 Cloud Server Connected';
+          serverBadge.style.color = 'var(--ios-green)';
+        }
+        if (myRoomCode && roomJoinOverlay.style.display !== 'none') {
+          socket.emit('join_room', {
+            roomCode: myRoomCode,
+            username: myUsername,
+            publicKey: myPubKeyJwk,
+            roomPassword: myRoomPassword
+          });
+        }
       });
 
-      socket.on('connect_error', () => {
-        isConnectedToServer = false;
-        console.warn('⚠️ Socket server unreachable. Standalone mode active.');
+      socket.on('connect_error', (err) => {
+        console.warn('⚠️ Socket connection error (waking up server...):', err);
+        const serverBadge = document.getElementById('serverStatusBadge');
+        if (serverBadge) {
+          serverBadge.style.display = 'inline-block';
+          serverBadge.textContent = '⏳ Waking up cloud server...';
+          serverBadge.style.color = 'var(--ios-orange)';
+        }
       });
 
       setupSocketListeners();
@@ -630,7 +654,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     myRoomPassword = roomPasswordInput.value.trim();
 
     const customUrl = serverUrlInput?.value.trim();
-    if (customUrl) {
+    if (customUrl && (!socket || socket.io.uri !== customUrl)) {
       initSocket(customUrl);
     }
 
@@ -644,11 +668,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         roomPassword: myRoomPassword
       });
     } else {
-      roomJoinOverlay.style.display = 'none';
-      currentRoomLabel.textContent = `Room: ${myRoomCode}`;
-      addSystemMessage(`ℹ️ Joined room '${myRoomCode}' in Standalone Mode.`);
-      restoreTelegramCloudHistory([]);
-      renderVoiceChannels();
+      joinErrorMessage.textContent = '⏳ Connecting to Cloud Server (waking up Render backend)... Please wait 10-15 seconds and tap Enter again if needed.';
+      joinErrorMessage.style.display = 'block';
+      joinErrorMessage.style.background = 'rgba(255, 149, 0, 0.2)';
+      joinErrorMessage.style.color = 'var(--ios-orange)';
+      joinErrorMessage.style.border = '1px solid rgba(255, 149, 0, 0.4)';
+
+      setTimeout(() => {
+        if (socket && isConnectedToServer) {
+          joinErrorMessage.style.display = 'none';
+          socket.emit('join_room', {
+            roomCode: myRoomCode,
+            username: myUsername,
+            publicKey: myPubKeyJwk,
+            roomPassword: myRoomPassword
+          });
+        }
+      }, 3000);
     }
   });
 
