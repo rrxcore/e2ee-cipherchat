@@ -2666,6 +2666,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <span class="reaction-badge" onclick="sendReaction('${id}', '👍')">👍</span>
         <span class="reaction-badge" onclick="sendReaction('${id}', '🔥')">🔥</span>
       </div>
+    `;
     messagesArea.appendChild(msgDiv);
     messagesArea.scrollTop = messagesArea.scrollHeight;
     attachContextMenuEvents(msgDiv, id, sender, text);
@@ -2713,21 +2714,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     const msgDiv = document.createElement('div');
     msgDiv.className = 'msg-bubble-container outgoing';
     msgDiv.id = id;
-    const imageHtml = isImage ? `<img src="${fileUrl}" alt="Decrypted Image" class="e2ee-img-preview">` : '';
-    const timerBadgeHtml = timerSecs > 0 ? `<span class="timer-badge">⏱️ ${timerSecs}s</span>` : '';
+    const imageHtml = isImage ? '<img src="' + fileUrl + '" alt="Decrypted Image" class="e2ee-img-preview">' : '';
+    const timerBadgeHtml = timerSecs > 0 ? '<span class="timer-badge">T: ' + timerSecs + 's</span>' : '';
 
-    msgDiv.innerHTML = `
-      <button type="button" class="msg-options-btn" title="Message Options (⋮)">⋮</button>
-      <div class="msg-context-menu">
-        ${buildContextMenuHtml(timeStr)}
-      </div>
-      <div class="msg-bubble">
-        ${imageHtml}
-        📎 <strong>${escapeHtml(fileName)}</strong><br>
-        <a href="${fileUrl}" download="${escapeHtml(fileName)}" style="color: #fff; font-size: 0.8rem; text-decoration: underline;">Download File</a>
-        <div class="msg-time">${timerBadgeHtml} 🔒 Encrypted File</div>
-      </div>
-    `;
+    msgDiv.innerHTML = 
+      '<button type="button" class="msg-options-btn" title="Message Options">...</button>' +
+      '<div class="msg-context-menu">' +
+        buildContextMenuHtml(timeStr) +
+      '</div>' +
+      '<div class="msg-bubble">' +
+        imageHtml +
+        ' [File] <strong>' + escapeHtml(fileName) + '</strong><br>' +
+        '<a href="' + fileUrl + '" download="' + escapeHtml(fileName) + '" style="color: #fff; font-size: 0.8rem; text-decoration: underline;">Download File</a>' +
+        '<div class="msg-time">' + timerBadgeHtml + ' Encrypted File</div>' +
+      '</div>';
     messagesArea.appendChild(msgDiv);
     messagesArea.scrollTop = messagesArea.scrollHeight;
     attachContextMenuEvents(msgDiv, id, sender, `File: ${fileName}`);
