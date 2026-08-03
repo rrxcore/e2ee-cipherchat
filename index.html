@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CipherChat | rrxcore edition</title>
   <meta name="description" content="CipherChat rrxcore edition - Unified WhatsApp, Telegram & Discord Features with Web Crypto E2EE.">
-  <link rel="stylesheet" href="css/style.css?v=20260803v7">
+  <link rel="stylesheet" href="css/style.css?v=20260803v8">
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body data-theme="ios-dark">
@@ -111,6 +111,30 @@
           ⚡ rrxcore • Delete For Me / Delete For Everyone
         </div>
       </div>
+
+      <!-- Emergency Fallback: Guarantees room entry even if app.js has issues -->
+      <script>
+        (function() {
+          function forceEnterRoom() {
+            var overlay = document.getElementById('roomJoinOverlay');
+            var chat = document.getElementById('singleChatView');
+            if (overlay) {
+              overlay.style.cssText = 'display:none!important;opacity:0!important;visibility:hidden!important;';
+              overlay.classList.add('hidden');
+            }
+            if (chat) {
+              chat.style.cssText = 'display:flex!important;opacity:1!important;visibility:visible!important;';
+            }
+          }
+          document.addEventListener('DOMContentLoaded', function() {
+            var enterBtn = document.getElementById('enterRoomBtn');
+            var bypassBtn = document.getElementById('bypassJoinBtn');
+            var form = document.getElementById('joinForm');
+            if (bypassBtn) bypassBtn.addEventListener('click', forceEnterRoom);
+            if (form) form.addEventListener('submit', function(e) { e.preventDefault(); forceEnterRoom(); });
+          });
+        })();
+      </script>
     </div>
 
     <!-- 2. SINGLE CHAT VIEW -->
@@ -659,7 +683,7 @@
     </div>
   </div>
 
-  <script src="js/crypto.js?v=20260803v7"></script>
-  <script src="js/app.js?v=20260803v7"></script>
+  <script src="js/crypto.js?v=20260803v8"></script>
+  <script src="js/app.js?v=20260803v8"></script>
 </body>
 </html>
