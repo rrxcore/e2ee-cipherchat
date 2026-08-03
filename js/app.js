@@ -63,6 +63,89 @@ document.addEventListener('DOMContentLoaded', async () => {
   const messageInput = document.getElementById('messageInput');
   const fileInput = document.getElementById('fileInput');
 
+  // --- HARMONIC ROOM JOIN CHIME (ASCENDING ARPEGGIO CHIME) ---
+
+  function playRoomJoinChime() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6 Harmonic Chime
+      notes.forEach((freq, index) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+
+        const startTime = ctx.currentTime + index * 0.08;
+        gain.gain.setValueAtTime(0, startTime);
+        gain.gain.linearRampToValueAtTime(0.2, startTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.35);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(startTime);
+        osc.stop(startTime + 0.35);
+      });
+    } catch (e) {
+      console.warn('Room join chime fallback:', e);
+    }
+  }
+
+  // --- REAL-TIME TYPING INDICATOR INPUT DEBOUNCER ---
+
+  let userTypingTimer = null;
+  messageInput?.addEventListener('input', () => {
+    if (socket && isConnectedToServer) {
+      socket.emit('typing_start');
+      clearTimeout(userTypingTimer);
+      userTypingTimer = setTimeout(() => {
+        socket.emit('typing_stop');
+      }, 2500);
+    }
+  });
+
+  // --- MOBILE BACKGROUND APP-SWITCHING KEEP-ALIVE ENGINE ---
+
+  function initMobileBackgroundKeepAlive() {
+    let silentAudioCtx = null;
+
+    function ensureBackgroundAudioLoop() {
+      try {
+        if (!silentAudioCtx) {
+          silentAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = silentAudioCtx.createOscillator();
+          const gain = silentAudioCtx.createGain();
+          gain.gain.value = 0.0001; // Silent audio lock to keep mobile OS thread alive
+          osc.connect(gain);
+          gain.connect(silentAudioCtx.destination);
+          osc.start();
+        }
+        if (silentAudioCtx.state === 'suspended') {
+          silentAudioCtx.resume();
+        }
+      } catch (e) {}
+    }
+
+    document.addEventListener('touchstart', ensureBackgroundAudioLoop, { once: true });
+    document.addEventListener('click', ensureBackgroundAudioLoop, { once: true });
+
+    setInterval(() => {
+      if (socket && isConnectedToServer) {
+        socket.emit('heartbeat_ping');
+      }
+    }, 4000);
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        if (socket && isConnectedToServer && myRoomCode) {
+          socket.emit('join_room', { roomCode: myRoomCode, username: myUsername });
+        }
+      }
+    });
+  }
+
+  initMobileBackgroundKeepAlive();
+
   // Telegram Pinning & Reply Preview Elements
   const pinnedMessageBar = document.getElementById('pinnedMessageBar');
   const pinnedSender = document.getElementById('pinnedSender');
@@ -786,6 +869,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     socket.on('peer_joined', async (peer) => {
+      playRoomJoinChime();
       addSystemMessage(`👋 User '${peer.username}' joined the room.`);
       socket.emit('share_public_key', {
         recipientSocketId: peer.socketId,
@@ -794,6 +878,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (peer.publicKey) {
         await setupPeerSession(peer.socketId, peer.username, peer.publicKey);
         renderPeerList();
+      }
+    });
+
+    socket.on('peer_typing_start', ({ socketId, username }) => {
+      const typingIndicatorBar = document.getElementById('typingIndicatorBar');
+      const typingUserText = document.getElementById('typingUserText');
+      if (typingUserText && typingIndicatorBar) {
+        typingUserText.textContent = `💬 ${username} is typing...`;
+        typingIndicatorBar.style.display = 'flex';
+      }
+    });
+
+    socket.on('peer_typing_stop', ({ socketId }) => {
+      const typingIndicatorBar = document.getElementById('typingIndicatorBar');
+      if (typingIndicatorBar) {
+        typingIndicatorBar.style.display = 'none';
       }
     });
 
