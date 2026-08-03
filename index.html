@@ -181,12 +181,20 @@
           </div>
         </aside>
 
+        <!-- Sidebar Backdrop for Mobile Drawer Overlay -->
+        <div class="sidebar-overlay-backdrop" id="sidebarOverlayBackdrop"></div>
+
         <!-- Main Chat & Video Call Panel -->
         <section class="chat-main">
           <div class="chat-topbar">
-            <div>
-              <div class="chat-channel-title" id="activeChannelHeader"># general-chat</div>
-              <div class="chat-channel-subtitle">Direct Web Crypto API E2EE Channel</div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <button type="button" class="mobile-sidebar-toggle" id="mobileSidebarToggle" title="Open Channels Menu">
+                ☰ Channels
+              </button>
+              <div>
+                <div class="chat-channel-title" id="activeChannelHeader"># general-chat</div>
+                <div class="chat-channel-subtitle">Direct Web Crypto API E2EE Channel</div>
+              </div>
             </div>
             <div style="display: flex; align-items: center; gap: 8px;">
               <div class="session-security-badge" id="disappearingBadge" style="display: none; background: rgba(255, 149, 0, 0.15); border-color: var(--ios-orange); color: var(--ios-orange);">

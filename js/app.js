@@ -397,13 +397,50 @@ document.addEventListener('DOMContentLoaded', async () => {
     replyPreviewBar.style.display = 'none';
   });
 
-  function setReplyTarget(sender, text) {
-    activeReplyQuote = { sender, text };
+  function scrollToMessage(msgId) {
+    if (!msgId) return;
+    const el = document.getElementById(msgId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.style.transition = 'background 0.4s ease';
+      const origBg = el.style.background;
+      el.style.background = 'rgba(0, 122, 255, 0.35)';
+      setTimeout(() => {
+        el.style.background = origBg;
+      }, 1400);
+    }
+  }
+
+  function setReplyTarget(sender, text, msgId = null) {
+    activeReplyQuote = { sender, text, msgId };
     replyTargetSender.textContent = `Replying to @${sender}`;
     replyTargetText.textContent = text;
     replyPreviewBar.style.display = 'flex';
     messageInput.focus();
   }
+
+  // Mobile Drawer Toggle Handlers
+  const mobileSidebarToggle = document.getElementById('mobileSidebarToggle');
+  const sidebarOverlayBackdrop = document.getElementById('sidebarOverlayBackdrop');
+
+  mobileSidebarToggle?.addEventListener('click', () => {
+    chatSidebar?.classList.toggle('mobile-open');
+    sidebarOverlayBackdrop?.classList.toggle('active');
+  });
+
+  sidebarOverlayBackdrop?.addEventListener('click', () => {
+    chatSidebar?.classList.remove('mobile-open');
+    sidebarOverlayBackdrop?.classList.remove('active');
+  });
+
+  document.querySelectorAll('#textChannelList, #voiceChannelList').forEach(el => {
+    el?.addEventListener('click', (e) => {
+      if (e.target.closest('.channel-item') && window.innerWidth <= 768) {
+        chatSidebar?.classList.remove('mobile-open');
+        sidebarOverlayBackdrop?.classList.remove('active');
+      }
+    });
+  });
 
   function speakText(text) {
     if ('speechSynthesis' in window) {
@@ -440,6 +477,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       e.stopPropagation();
       document.querySelectorAll('.msg-context-menu').forEach(m => m !== menu && m.classList.remove('active'));
       menu.classList.toggle('active');
+
+      if (menu.classList.contains('active') && window.innerWidth > 768) {
+        const rect = optionsBtn.getBoundingClientRect();
+        if (rect.left > window.innerWidth / 2) {
+          menu.style.right = '0';
+          menu.style.left = 'auto';
+        } else {
+          menu.style.left = '0';
+          menu.style.right = 'auto';
+        }
+      }
     };
 
     container.oncontextmenu = (e) => {
@@ -447,6 +495,29 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.querySelectorAll('.msg-context-menu').forEach(m => m !== menu && m.classList.remove('active'));
       menu.classList.toggle('active');
     };
+
+    // WhatsApp Swipe to Reply gesture on mobile
+    let touchStartX = 0;
+    container.addEventListener('touchstart', (e) => {
+      touchStartX = e.touches[0].clientX;
+    }, { passive: true });
+
+    container.addEventListener('touchmove', (e) => {
+      const touchCurrX = e.touches[0].clientX;
+      const deltaX = touchCurrX - touchStartX;
+      if (deltaX > 0 && deltaX < 75) {
+        container.style.transform = `translateX(${deltaX}px)`;
+      }
+    }, { passive: true });
+
+    container.addEventListener('touchend', (e) => {
+      const touchEndX = e.changedTouches[0].clientX;
+      const deltaX = touchEndX - touchStartX;
+      container.style.transform = '';
+      if (deltaX > 45) {
+        setReplyTarget(sender, text, msgId);
+      }
+    });
 
     // Emoji reaction buttons
     menu.querySelectorAll('.top-reaction-btn').forEach(btn => {
@@ -792,7 +863,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else if (msg.payloadType === 'voice') {
           renderOutgoingVoiceMessage(msg.senderUsername, msg.plaintextFallback || '#', msg.audioDuration, msg.timerSeconds, msg.id);
         } else {
-          renderOutgoingMessage(msg.senderUsername, msg.plaintextFallback || 'Restored E2EE Cloud Message', msg.id, msg.timerSeconds);
+          renderOutgoingMessage(msg.senderUsername, msg.plaintextFallback || 'Restored E2EE Cloud Message', msg.id, msg.timerSeconds, msg.quotedReply);
         }
         restoredCount++;
       } else {
@@ -809,7 +880,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else if (msg.payloadType === 'voice') {
           renderIncomingVoiceMessage(msg.senderUsername, msg.plaintextFallback || '#', msg.audioDuration, msg.timestamp, msg.timerSeconds, msg.id);
         } else {
-          renderIncomingMessage(msg.senderUsername, decodedText, msg.timestamp, msg.timerSeconds, msg.id);
+          renderIncomingMessage(msg.senderUsername, decodedText, msg.timestamp, msg.timerSeconds, msg.id, msg.quotedReply);
         }
         restoredCount++;
       }
@@ -939,7 +1010,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             payload.ciphertext,
             payload.iv
           );
-          renderIncomingMessage(payload.senderUsername, plaintext, payload.timestamp, payload.timerSeconds, payload.id);
+          renderIncomingMessage(payload.senderUsername, plaintext, payload.timestamp, payload.timerSeconds, payload.id, payload.quotedReply);
         }
       } catch (err) {
         console.error('Decryption failed:', err);
@@ -2228,18 +2299,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Text Send with Quoted Reply Support
   chatForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    let text = messageInput.value.trim();
+    const text = messageInput.value.trim();
     if (!text) return;
 
+    const quoteToAttach = activeReplyQuote ? { ...activeReplyQuote } : null;
     if (activeReplyQuote) {
-      text = `> Replying to @${activeReplyQuote.sender}: "${activeReplyQuote.text.substring(0, 40)}..."\n${text}`;
       activeReplyQuote = null;
       replyPreviewBar.style.display = 'none';
     }
 
+    if (socket && isConnectedToServer) {
+      socket.emit('typing_stop');
+    }
+
     messageInput.value = '';
     const msgId = 'msg_' + Date.now();
-    renderOutgoingMessage(myUsername, text, msgId, disappearingTimerSeconds);
+    renderOutgoingMessage(myUsername, text, msgId, disappearingTimerSeconds, quoteToAttach);
 
     if (socket && isConnectedToServer) {
       for (const [peerSocketId, peer] of peersMap.entries()) {
@@ -2253,6 +2328,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             payloadType: 'text',
             timerSeconds: disappearingTimerSeconds,
             messageId: msgId,
+            quotedReply: quoteToAttach,
             plaintextFallback: text
           });
         } catch (err) {
@@ -2446,7 +2522,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     `;
   }
 
-  function renderOutgoingMessage(sender, text, msgId, timerSecs) {
+  function renderOutgoingMessage(sender, text, msgId, timerSecs, quotedReply = null) {
     const id = msgId || 'msg_' + Date.now();
     renderedMsgIdsSet.add(id);
 
@@ -2457,6 +2533,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         plaintextFallback: text,
         payloadType: 'text',
         timerSeconds: 0,
+        quotedReply: quotedReply || null,
         timestamp: new Date().toLocaleTimeString()
       });
     }
@@ -2468,12 +2545,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const timerBadgeHtml = timerSecs > 0 ? `<span class="timer-badge">⏱️ ${timerSecs}s</span>` : '';
 
+    let quoteHtml = '';
+    if (quotedReply && quotedReply.sender && quotedReply.text) {
+      quoteHtml = `
+        <div class="whatsapp-quote-card" onclick="scrollToMessage('${quotedReply.msgId || ''}')">
+          <div class="whatsapp-quote-sender">Replying to @${escapeHtml(quotedReply.sender)}</div>
+          <div class="whatsapp-quote-text">${escapeHtml(quotedReply.text)}</div>
+        </div>
+      `;
+    }
+
     msgDiv.innerHTML = `
       <button type="button" class="msg-options-btn" title="Message Options (⋮)">⋮</button>
       <div class="msg-context-menu">
         ${buildContextMenuHtml(time)}
       </div>
       <div class="msg-bubble">
+        ${quoteHtml}
         ${escapeHtml(text)}
         <div class="msg-time">${time} ${timerBadgeHtml} <span class="e2ee-tag">🔒 Encrypted</span></div>
       </div>
@@ -2490,7 +2578,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (timerSecs > 0) scheduleMessageSelfDestruct(msgDiv, timerSecs);
   }
 
-  function renderIncomingMessage(sender, text, timestamp, timerSecs, msgId) {
+  function renderIncomingMessage(sender, text, timestamp, timerSecs, msgId, quotedReply = null) {
     const id = msgId || 'in_' + Date.now();
     renderedMsgIdsSet.add(id);
 
@@ -2501,6 +2589,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         plaintextFallback: text,
         payloadType: 'text',
         timerSeconds: 0,
+        quotedReply: quotedReply || null,
         timestamp: timestamp || new Date().toLocaleTimeString()
       });
     }
@@ -2512,6 +2601,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const timerBadgeHtml = timerSecs > 0 ? `<span class="timer-badge">⏱️ ${timerSecs}s</span>` : '';
 
+    let quoteHtml = '';
+    if (quotedReply && quotedReply.sender && quotedReply.text) {
+      quoteHtml = `
+        <div class="whatsapp-quote-card" onclick="scrollToMessage('${quotedReply.msgId || ''}')">
+          <div class="whatsapp-quote-sender">Replying to @${escapeHtml(quotedReply.sender)}</div>
+          <div class="whatsapp-quote-text">${escapeHtml(quotedReply.text)}</div>
+        </div>
+      `;
+    }
+
     msgDiv.innerHTML = `
       <button type="button" class="msg-options-btn" title="Message Options (⋮)">⋮</button>
       <div class="msg-context-menu">
@@ -2519,6 +2618,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       </div>
       <div class="msg-sender">${escapeHtml(sender)}</div>
       <div class="msg-bubble">
+        ${quoteHtml}
         ${escapeHtml(text)}
         <div class="msg-time">${timeStr} ${timerBadgeHtml} <span class="e2ee-tag">🔒 Decrypted</span></div>
       </div>
@@ -2527,7 +2627,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         <span class="reaction-badge" onclick="sendReaction('${id}', '👍')">👍</span>
         <span class="reaction-badge" onclick="sendReaction('${id}', '🔥')">🔥</span>
       </div>
-    `;
     messagesArea.appendChild(msgDiv);
     messagesArea.scrollTop = messagesArea.scrollHeight;
     attachContextMenuEvents(msgDiv, id, sender, text);
