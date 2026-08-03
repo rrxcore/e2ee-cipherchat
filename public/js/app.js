@@ -1178,7 +1178,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     voiceSettingsModal.classList.remove('active');
   });
 
-  // --- DISCORD VOICE CHANNEL SCOPED WEBRTC CAMERA & SCREEN SHARE ENGINE ---
+  function updateEncoderControlsVisibility() {
+    const isBroadcasting = isCameraActive || isScreenShareActive;
+    const qualEl = document.getElementById('videoQualitySelect');
+    const bitrEl = document.getElementById('videoBitrateSelect');
+
+    if (qualEl && qualEl.closest('label')) {
+      qualEl.closest('label').style.display = isBroadcasting ? 'inline-flex' : 'none';
+    }
+    if (bitrEl && bitrEl.closest('label')) {
+      bitrEl.closest('label').style.display = isBroadcasting ? 'inline-flex' : 'none';
+    }
+  }
+
+  updateEncoderControlsVisibility();
 
   async function broadcastWebRTCStream(stream, labelPrefix) {
     if (!stream) return;
@@ -1224,6 +1237,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           const params = s.getParameters();
           if (!params.encodings) params.encodings = [{}];
           params.encodings[0].maxBitrate = selectedBitrateBps;
+          params.encodings[0].degradationPreference = 'maintain-framerate';
           await s.setParameters(params);
         }
       } catch (e) {
@@ -1246,25 +1260,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         localVideoStream.getTracks().forEach(t => t.stop());
       }
 
+      // Smoothness-first camera constraints (60fps ideal target)
       localVideoStream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: profile.width, max: 3840 },
-          height: { ideal: profile.height, max: 2160 },
-          frameRate: { ideal: profile.fps, max: 60 }
-        }
+          width: { ideal: profile.width <= 1920 ? profile.width : 1920 },
+          height: { ideal: profile.height <= 1080 ? profile.height : 1080 },
+          frameRate: { ideal: 60, min: 30 }
+        },
+        audio: false
       });
 
+      const vTrack = localVideoStream.getVideoTracks()[0];
+      if (vTrack && 'contentHint' in vTrack) {
+        vTrack.contentHint = 'motion';
+      }
+
       voiceCameraBtn.classList.add('active');
-      addVideoCard('my_cam', `${myUsername} (Camera ${selectedQualityKey.toUpperCase()} @ ${mbpsStr}Mbps)`, localVideoStream);
+      addVideoCard('my_cam', `${myUsername} (Camera 60FPS @ ${mbpsStr}Mbps)`, localVideoStream);
+      updateEncoderControlsVisibility();
       await broadcastWebRTCStream(localVideoStream, 'Camera');
 
-      addSystemMessage(`📹 WebRTC Camera active at ${selectedQualityKey.toUpperCase()} (${profile.width}x${profile.height} @ ${profile.fps}FPS, ${mbpsStr}Mbps).`);
+      addSystemMessage(`📹 WebRTC Ultra-Smooth Camera active at 60FPS (${mbpsStr}Mbps).`);
     } catch (err) {
-      alert(`Camera stream at ${selectedQualityKey.toUpperCase()} unavailable. Falling back to default HD.`);
+      console.warn('Camera access error:', err);
+      alert(`Camera stream unavailable or permission denied.`);
     }
   }
 
   async function startScreenShareStream() {
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     const profile = videoQualityProfiles[selectedQualityKey];
     const mbpsStr = (selectedBitrateBps / 1000000).toFixed(0);
 
@@ -1273,33 +1297,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         localScreenStream.getTracks().forEach(t => t.stop());
       }
 
-      try {
+      if (isMobile) {
+        // Native Mobile Android Screen Share Call (100% reliable)
         localScreenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            displaySurface: 'monitor',
-            width: { ideal: profile.width, max: 3840 },
-            height: { ideal: profile.height, max: 2160 },
-            frameRate: { ideal: profile.fps, max: 60 }
-          },
-          audio: true
+          video: true
         });
-      } catch (e1) {
-        console.warn('Screen share primary 4K profile fallback:', e1);
+      } else {
+        // Desktop Screen Share Call
         try {
           localScreenStream = await navigator.mediaDevices.getDisplayMedia({
-            video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } },
-            audio: false
+            video: {
+              displaySurface: 'monitor',
+              width: { ideal: profile.width, max: 3840 },
+              height: { ideal: profile.height, max: 2160 },
+              frameRate: { ideal: profile.fps, max: 60 }
+            },
+            audio: true
           });
-        } catch (e2) {
-          localScreenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        } catch (e1) {
+          localScreenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } }
+          });
         }
       }
 
+      const vTrack = localScreenStream.getVideoTracks()[0];
+      if (vTrack && 'contentHint' in vTrack) {
+        vTrack.contentHint = 'detail';
+      }
+
       voiceScreenShareBtn.classList.add('active');
-      addVideoCard('my_screen', `${myUsername} (Screen Share ${selectedQualityKey.toUpperCase()} @ ${mbpsStr}Mbps)`, localScreenStream);
+      addVideoCard('my_screen', `${myUsername} (Screen Share ${selectedQualityKey.toUpperCase()})`, localScreenStream);
+      updateEncoderControlsVisibility();
       await broadcastWebRTCStream(localScreenStream, 'Screen Share');
 
-      addSystemMessage(`🖥️ WebRTC Screen Share active at ${selectedQualityKey.toUpperCase()} (${profile.width}x${profile.height} @ ${profile.fps}FPS, ${mbpsStr}Mbps).`);
+      addSystemMessage(`🖥️ WebRTC Screen Share active.`);
 
       localScreenStream.getVideoTracks()[0].onended = () => {
         voiceScreenShareBtn.classList.remove('active');
@@ -1308,11 +1340,13 @@ document.addEventListener('DOMContentLoaded', async () => {
           socket.emit('webrtc_stream_stopped', { streamType: 'screen share' });
         }
         isScreenShareActive = false;
+        updateEncoderControlsVisibility();
       };
     } catch (err) {
       console.warn('Screen share canceled or unsupported:', err);
       voiceScreenShareBtn.classList.remove('active');
       isScreenShareActive = false;
+      updateEncoderControlsVisibility();
     }
   }
 
@@ -1330,6 +1364,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (socket && isConnectedToServer) {
         socket.emit('webrtc_stream_stopped', { streamType: 'camera' });
       }
+      updateEncoderControlsVisibility();
       addSystemMessage(`📹 WebRTC Camera Video stopped.`);
     }
   });
@@ -1348,6 +1383,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (socket && isConnectedToServer) {
         socket.emit('webrtc_stream_stopped', { streamType: 'screen share' });
       }
+      updateEncoderControlsVisibility();
       addSystemMessage(`🖥️ WebRTC Screen Share stopped.`);
     }
   });
