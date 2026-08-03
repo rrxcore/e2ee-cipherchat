@@ -767,7 +767,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           serverBadge.textContent = '🟢 Cloud Server Connected';
           serverBadge.style.color = 'var(--ios-green)';
         }
-        if (myRoomCode && roomJoinOverlay.style.display !== 'none') {
+        // If user already submitted the form but server was still waking up, join now
+        if (myRoomCode && myUsername && pendingRoomJoin) {
+          pendingRoomJoin = false;
           socket.emit('join_room', {
             roomCode: myRoomCode,
             username: myUsername,
@@ -824,59 +826,47 @@ document.addEventListener('DOMContentLoaded', async () => {
   function hideJoinOverlayAndShowChat() {
     if (roomJoinOverlay) {
       roomJoinOverlay.classList.add('hidden');
-      roomJoinOverlay.style.display = 'none';
+      roomJoinOverlay.style.cssText = 'display:none!important;opacity:0!important;visibility:hidden!important;pointer-events:none!important;';
     }
     if (singleChatView) {
-      singleChatView.style.display = 'flex';
-      singleChatView.style.opacity = '1';
-      singleChatView.style.visibility = 'visible';
+      singleChatView.style.cssText = 'display:flex!important;opacity:1!important;visibility:visible!important;';
+    }
+  }
+
+  let pendingRoomJoin = false;
+
+  function doJoin() {
+    myUsername = usernameInput.value.trim() || 'User_' + Math.floor(Math.random() * 1000);
+    myRoomCode = roomCodeInput.value.trim() || 'rrxcore-1';
+    myRoomPassword = roomPasswordInput.value.trim();
+    saveUserCredentials();
+
+    // Always open chat immediately — no waiting
+    hideJoinOverlayAndShowChat();
+    currentRoomLabel.textContent = `Room: ${myRoomCode}`;
+    addSystemMessage(`✨ Joining room '${myRoomCode}' as ${myUsername}...`);
+
+    if (socket && isConnectedToServer) {
+      socket.emit('join_room', {
+        roomCode: myRoomCode,
+        username: myUsername,
+        publicKey: myPubKeyJwk,
+        roomPassword: myRoomPassword
+      });
+    } else {
+      // Server still waking up — set flag so connect handler sends join_room
+      pendingRoomJoin = true;
+      addSystemMessage('⏳ Cloud server is waking up... will join room once connected.');
     }
   }
 
   bypassJoinBtn?.addEventListener('click', () => {
-    myUsername = usernameInput.value.trim() || 'User_' + Math.floor(Math.random() * 1000);
-    myRoomCode = roomCodeInput.value.trim() || 'rrxcore-1';
-    myRoomPassword = roomPasswordInput.value.trim();
-    saveUserCredentials();
-
-    hideJoinOverlayAndShowChat();
-    currentRoomLabel.textContent = `Room: ${myRoomCode}`;
-    addSystemMessage(`✨ Entered room '${myRoomCode}' as ${myUsername}.`);
-
-    if (socket && isConnectedToServer) {
-      socket.emit('join_room', {
-        roomCode: myRoomCode,
-        username: myUsername,
-        publicKey: myPubKeyJwk,
-        roomPassword: myRoomPassword
-      });
-    }
+    doJoin();
   });
 
   joinForm?.addEventListener('submit', (e) => {
     e.preventDefault();
-    myUsername = usernameInput.value.trim() || 'User_' + Math.floor(Math.random() * 1000);
-    myRoomCode = roomCodeInput.value.trim() || 'rrxcore-1';
-    myRoomPassword = roomPasswordInput.value.trim();
-    saveUserCredentials();
-
-    const customUrl = serverUrlInput?.value.trim();
-    if (!socket || (customUrl && socket.io.uri !== customUrl)) {
-      initSocket(customUrl);
-    }
-
-    hideJoinOverlayAndShowChat();
-    currentRoomLabel.textContent = `Room: ${myRoomCode}`;
-    addSystemMessage(`✨ Joining server '${myRoomCode}' as ${myUsername}...`);
-
-    if (socket && isConnectedToServer) {
-      socket.emit('join_room', {
-        roomCode: myRoomCode,
-        username: myUsername,
-        publicKey: myPubKeyJwk,
-        roomPassword: myRoomPassword
-      });
-    }
+    doJoin();
   });
 
   // --- TELEGRAM FAST CLOUD MESSAGING RECOVERY ENGINE ---
@@ -932,9 +922,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!socket) return;
 
     socket.on('room_error', ({ message }) => {
+      // Show the join overlay again if password was wrong
       if (roomJoinOverlay) {
+        roomJoinOverlay.style.cssText = '';
         roomJoinOverlay.classList.remove('hidden');
         roomJoinOverlay.style.display = 'flex';
+      }
+      if (singleChatView) {
+        singleChatView.style.cssText = '';
       }
       joinErrorMessage.textContent = `❌ ${message}`;
       joinErrorMessage.style.display = 'block';
