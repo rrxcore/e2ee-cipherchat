@@ -908,6 +908,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     socket.on('webrtc_ice_candidate', async ({ senderSocketId, candidate }) => {
       await handleWebRTCCandidate(senderSocketId, candidate);
     });
+
+    socket.on('webrtc_stream_stopped', ({ senderSocketId, streamType }) => {
+      removeVideoCard(senderSocketId);
+      addSystemMessage(`📹 Peer stopped ${streamType || 'video'} stream.`);
+    });
   }
 
   // --- SHRINK & EXPAND VIDEO VIEW MODES (DRAGGABLE PiP, COMPACT, THEATER, STAGE) ---
@@ -1297,6 +1302,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       localScreenStream.getVideoTracks()[0].onended = () => {
         voiceScreenShareBtn.classList.remove('active');
         removeVideoCard('my_screen');
+        if (socket && isConnectedToServer) {
+          socket.emit('webrtc_stream_stopped', { streamType: 'screen share' });
+        }
         isScreenShareActive = false;
       };
     } catch (err) {
@@ -1318,6 +1326,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         localVideoStream.getTracks().forEach(t => t.stop());
         localVideoStream = null;
       }
+      if (socket && isConnectedToServer) {
+        socket.emit('webrtc_stream_stopped', { streamType: 'camera' });
+      }
       addSystemMessage(`📹 WebRTC Camera Video stopped.`);
     }
   });
@@ -1332,6 +1343,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (localScreenStream) {
         localScreenStream.getTracks().forEach(t => t.stop());
         localScreenStream = null;
+      }
+      if (socket && isConnectedToServer) {
+        socket.emit('webrtc_stream_stopped', { streamType: 'screen share' });
       }
       addSystemMessage(`🖥️ WebRTC Screen Share stopped.`);
     }
