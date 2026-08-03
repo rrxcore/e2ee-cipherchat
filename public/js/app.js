@@ -801,34 +801,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     roomCodeInput.value = code;
   });
 
+  // Auto-restore saved login credentials from localStorage
+  try {
+    const savedUser = localStorage.getItem('cipherchat_saved_username');
+    const savedRoom = localStorage.getItem('cipherchat_saved_roomcode');
+    const savedPass = localStorage.getItem('cipherchat_saved_password');
+    if (savedUser && usernameInput) usernameInput.value = savedUser;
+    if (savedRoom && roomCodeInput) roomCodeInput.value = savedRoom;
+    if (savedPass && roomPasswordInput) roomPasswordInput.value = savedPass;
+  } catch (e) {}
+
   const bypassJoinBtn = document.getElementById('bypassJoinBtn');
+
+  function saveUserCredentials() {
+    try {
+      if (myUsername) localStorage.setItem('cipherchat_saved_username', myUsername);
+      if (myRoomCode) localStorage.setItem('cipherchat_saved_roomcode', myRoomCode);
+      if (myRoomPassword) localStorage.setItem('cipherchat_saved_password', myRoomPassword);
+    } catch (e) {}
+  }
 
   bypassJoinBtn?.addEventListener('click', () => {
     myUsername = usernameInput.value.trim() || 'User_' + Math.floor(Math.random() * 1000);
     myRoomCode = roomCodeInput.value.trim() || 'rrxcore-1';
     myRoomPassword = roomPasswordInput.value.trim();
+    saveUserCredentials();
 
     roomJoinOverlay.style.display = 'none';
     currentRoomLabel.textContent = `Room: ${myRoomCode}`;
-    addSystemMessage(`✨ Joined room '${myRoomCode}' as ${myUsername}.`);
-  });
-
-  joinForm?.addEventListener('submit', (e) => {
-    e.preventDefault();
-    myUsername = usernameInput.value.trim() || 'User_' + Math.floor(Math.random() * 1000);
-    myRoomCode = roomCodeInput.value.trim() || 'rrxcore-1';
-    myRoomPassword = roomPasswordInput.value.trim();
-
-    const customUrl = serverUrlInput?.value.trim();
-    if (!socket || (customUrl && socket.io.uri !== customUrl)) {
-      initSocket(customUrl);
-    }
-
-    joinErrorMessage.style.display = 'block';
-    joinErrorMessage.textContent = '⏳ Connecting to Cloud Server & Joining Room...';
-    joinErrorMessage.style.background = 'rgba(0, 122, 255, 0.2)';
-    joinErrorMessage.style.color = 'var(--ios-cyan)';
-    joinErrorMessage.style.border = '1px solid rgba(0, 122, 255, 0.4)';
+    addSystemMessage(`✨ Entered room '${myRoomCode}' as ${myUsername}.`);
 
     if (socket && isConnectedToServer) {
       socket.emit('join_room', {
@@ -838,15 +839,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         roomPassword: myRoomPassword
       });
     }
+  });
 
-    // Auto-bypass after 4.5 seconds if cloud server is taking time to wake up
-    setTimeout(() => {
-      if (roomJoinOverlay.style.display !== 'none' && !isConnectedToServer) {
-        roomJoinOverlay.style.display = 'none';
-        currentRoomLabel.textContent = `Room: ${myRoomCode}`;
-        addSystemMessage(`ℹ️ Entered room '${myRoomCode}' (Cloud backend waking up in background).`);
-      }
-    }, 4500);
+  joinForm?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    myUsername = usernameInput.value.trim() || 'User_' + Math.floor(Math.random() * 1000);
+    myRoomCode = roomCodeInput.value.trim() || 'rrxcore-1';
+    myRoomPassword = roomPasswordInput.value.trim();
+    saveUserCredentials();
+
+    const customUrl = serverUrlInput?.value.trim();
+    if (!socket || (customUrl && socket.io.uri !== customUrl)) {
+      initSocket(customUrl);
+    }
+
+    roomJoinOverlay.style.display = 'none';
+    currentRoomLabel.textContent = `Room: ${myRoomCode}`;
+    addSystemMessage(`✨ Joining server '${myRoomCode}' as ${myUsername}...`);
+
+    if (socket && isConnectedToServer) {
+      socket.emit('join_room', {
+        roomCode: myRoomCode,
+        username: myUsername,
+        publicKey: myPubKeyJwk,
+        roomPassword: myRoomPassword
+      });
+    }
   });
 
   // --- TELEGRAM FAST CLOUD MESSAGING RECOVERY ENGINE ---

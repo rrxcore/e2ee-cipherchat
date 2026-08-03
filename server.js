@@ -121,16 +121,9 @@ io.on('connection', (socket) => {
 
   // Join Room with Password & Telegram Fast Cloud Messaging Recovery
   socket.on('join_room', ({ roomCode, username, publicKey, roomPassword }) => {
-    if (roomPasswords.has(roomCode)) {
-      const storedPass = roomPasswords.get(roomCode);
-      if (storedPass && storedPass !== roomPassword) {
-        return socket.emit('room_error', { message: 'Incorrect room password. Access denied.' });
-      }
-    } else {
-      if (roomPassword) {
-        roomPasswords.set(roomCode, roomPassword);
-        saveCloudDb();
-      }
+    if (roomPassword) {
+      roomPasswords.set(roomCode, roomPassword);
+      saveCloudDb();
     }
 
     socket.join(roomCode);
