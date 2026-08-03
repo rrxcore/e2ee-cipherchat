@@ -1260,28 +1260,39 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function startScreenShareStream() {
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     const profile = videoQualityProfiles[selectedQualityKey];
     const mbpsStr = (selectedBitrateBps / 1000000).toFixed(0);
+
     try {
       if (localScreenStream) {
         localScreenStream.getTracks().forEach(t => t.stop());
       }
 
-      localScreenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          displaySurface: 'monitor',
-          width: { ideal: profile.width, max: 3840 },
-          height: { ideal: profile.height, max: 2160 },
-          frameRate: { ideal: profile.fps, max: 60 }
-        },
-        audio: true
-      });
+      const videoConstraints = isMobile
+        ? { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }
+        : {
+            displaySurface: 'monitor',
+            width: { ideal: profile.width, max: 3840 },
+            height: { ideal: profile.height, max: 2160 },
+            frameRate: { ideal: profile.fps, max: 60 }
+          };
+
+      try {
+        localScreenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: videoConstraints,
+          audio: isMobile ? false : true
+        });
+      } catch (e1) {
+        console.warn('Mobile screen share fallback 1:', e1);
+        localScreenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      }
 
       voiceScreenShareBtn.classList.add('active');
-      addVideoCard('my_screen', `${myUsername} (Screen Share ${selectedQualityKey.toUpperCase()} @ ${mbpsStr}Mbps)`, localScreenStream);
+      addVideoCard('my_screen', `${myUsername} (Screen Share ${selectedQualityKey.toUpperCase()})`, localScreenStream);
       await broadcastWebRTCStream(localScreenStream, 'Screen Share');
 
-      addSystemMessage(`🖥️ WebRTC Screen Share active at ${selectedQualityKey.toUpperCase()} (${profile.width}x${profile.height} @ ${profile.fps}FPS, ${mbpsStr}Mbps).`);
+      addSystemMessage(`🖥️ WebRTC Screen Share active.`);
 
       localScreenStream.getVideoTracks()[0].onended = () => {
         voiceScreenShareBtn.classList.remove('active');
@@ -1289,7 +1300,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         isScreenShareActive = false;
       };
     } catch (err) {
-      console.warn('Screen share canceled:', err);
+      console.warn('Screen share canceled or unsupported:', err);
+      alert('📱 Mobile Screen Share Note:\n\nAndroid Chrome allows screen sharing (grant "Screen Record" permission when prompted).\n\niOS Safari restricts screen recording in web browsers.');
+      voiceScreenShareBtn.classList.remove('active');
+      isScreenShareActive = false;
     }
   }
 
