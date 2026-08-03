@@ -398,7 +398,32 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('inspector_packet', inspectPacket);
   });
 
-  // Disconnect
+  // Typing Indicator Relay
+  socket.on('typing_start', () => {
+    const roomCode = socket.roomCode;
+    const room = rooms.get(roomCode);
+    const user = room?.get(socket.id);
+    if (roomCode && user) {
+      socket.to(roomCode).emit('peer_typing_start', {
+        socketId: socket.id,
+        username: user.username
+      });
+    }
+  });
+
+  socket.on('typing_stop', () => {
+    const roomCode = socket.roomCode;
+    if (roomCode) {
+      socket.to(roomCode).emit('peer_typing_stop', {
+        socketId: socket.id
+      });
+    }
+  });
+
+  // Mobile Disconnect Grace Period Store (10s buffer)
+  const pendingDisconnects = new Map();
+
+  // Disconnect with 10s grace period for mobile app switching
   socket.on('disconnect', () => {
     leaveCurrentVoiceChannel(socket);
 
@@ -406,15 +431,22 @@ io.on('connection', (socket) => {
     if (roomCode && rooms.has(roomCode)) {
       const room = rooms.get(roomCode);
       const user = room.get(socket.id);
-      room.delete(socket.id);
 
-      if (room.size === 0) {
-        rooms.delete(roomCode);
-      } else {
-        socket.to(roomCode).emit('peer_left', { socketId: socket.id, username: user?.username });
-      }
+      const timeoutId = setTimeout(() => {
+        pendingDisconnects.delete(socket.id);
+        room.delete(socket.id);
+
+        if (room.size === 0) {
+          rooms.delete(roomCode);
+        } else {
+          socket.to(roomCode).emit('peer_left', { socketId: socket.id, username: user?.username });
+        }
+        console.log(`[Socket Disconnected Finalized] User '${user?.username}' left room '${roomCode}'`);
+      }, 10000);
+
+      pendingDisconnects.set(socket.id, timeoutId);
     }
-    console.log(`[Socket Disconnected] ID: ${socket.id}`);
+    console.log(`[Socket Disconnected (10s Grace Period Active)] ID: ${socket.id}`);
   });
 });
 
