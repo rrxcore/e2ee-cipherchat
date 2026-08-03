@@ -592,7 +592,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     try {
       const isGitHubPages = window.location.hostname.includes('github.io');
-      const connectTarget = targetUrl || (isGitHubPages ? 'http://localhost:3000' : window.location.origin);
+      const connectTarget = targetUrl || (isGitHubPages ? 'https://e2ee-cipherchat.onrender.com' : window.location.origin);
       socket = io(connectTarget, {
         timeout: 4000,
         reconnection: true,
