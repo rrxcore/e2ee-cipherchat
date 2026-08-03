@@ -1176,18 +1176,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   // --- DISCORD VOICE CHANNEL SCOPED WEBRTC CAMERA & SCREEN SHARE ENGINE ---
 
   async function broadcastWebRTCStream(stream, labelPrefix) {
-    if (!stream || !currentVoiceChannelId) return;
+    if (!stream) return;
     const videoTrack = stream.getVideoTracks()[0];
     if (!videoTrack) return;
 
-    const activeVc = voiceChannelsData.find(c => c.id === currentVoiceChannelId);
-    if (!activeVc || !activeVc.participants) return;
+    for (const [peerSocketId, peer] of peersMap.entries()) {
+      if (peerSocketId === socket?.id) continue;
 
-    const voicePeerIds = activeVc.participants
-      .map(p => p.socketId)
-      .filter(id => id !== socket?.id);
-
-    for (const peerSocketId of voicePeerIds) {
       let pc = peerConnections.get(peerSocketId);
       if (!pc) {
         pc = new RTCPeerConnection(iceConfiguration);
@@ -1239,13 +1234,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function startCameraStream() {
-    if (!currentVoiceChannelId) {
-      alert('🔊 Please join a Voice Channel (e.g., Lounge Voice) first to enable your Camera video stream.');
-      isCameraActive = false;
-      voiceCameraBtn.classList.remove('active');
-      return;
-    }
-
     const profile = videoQualityProfiles[selectedQualityKey];
     const mbpsStr = (selectedBitrateBps / 1000000).toFixed(0);
     try {
@@ -1272,13 +1260,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function startScreenShareStream() {
-    if (!currentVoiceChannelId) {
-      alert('🔊 Please join a Voice Channel (e.g., Lounge Voice) first to share your Screen.');
-      isScreenShareActive = false;
-      voiceScreenShareBtn.classList.remove('active');
-      return;
-    }
-
     const profile = videoQualityProfiles[selectedQualityKey];
     const mbpsStr = (selectedBitrateBps / 1000000).toFixed(0);
     try {
@@ -1787,12 +1768,33 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   async function createWebRTCOffer(targetSocketId) {
-    const pc = new RTCPeerConnection(iceConfiguration);
-    peerConnections.set(targetSocketId, pc);
+    let pc = peerConnections.get(targetSocketId);
+    if (!pc) {
+      pc = new RTCPeerConnection(iceConfiguration);
+      peerConnections.set(targetSocketId, pc);
+    }
 
-    const activeStream = processedVoiceStream || localRawStream;
-    if (activeStream) {
-      activeStream.getTracks().forEach(track => pc.addTrack(track, activeStream));
+    const activeAudio = processedVoiceStream || localRawStream;
+    if (activeAudio) {
+      activeAudio.getAudioTracks().forEach(track => {
+        if (!pc.getSenders().some(s => s.track && s.track.kind === 'audio')) {
+          pc.addTrack(track, activeAudio);
+        }
+      });
+    }
+    if (isCameraActive && localVideoStream) {
+      localVideoStream.getVideoTracks().forEach(track => {
+        if (!pc.getSenders().some(s => s.track && s.track.kind === 'video')) {
+          pc.addTrack(track, localVideoStream);
+        }
+      });
+    }
+    if (isScreenShareActive && localScreenStream) {
+      localScreenStream.getVideoTracks().forEach(track => {
+        if (!pc.getSenders().some(s => s.track && s.track.kind === 'video')) {
+          pc.addTrack(track, localScreenStream);
+        }
+      });
     }
 
     pc.onicecandidate = (event) => {
@@ -1817,10 +1819,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    socket.emit('webrtc_offer', {
-      targetSocketId,
-      sdpOffer: offer
-    });
+    if (socket) {
+      socket.emit('webrtc_offer', {
+        targetSocketId,
+        sdpOffer: offer
+      });
+    }
   }
 
   async function handleWebRTCOffer(senderSocketId, sdpOffer) {
@@ -1830,9 +1834,27 @@ document.addEventListener('DOMContentLoaded', async () => {
       peerConnections.set(senderSocketId, pc);
     }
 
-    const activeStream = processedVoiceStream || localRawStream;
-    if (activeStream) {
-      activeStream.getTracks().forEach(track => pc.addTrack(track, activeStream));
+    const activeAudio = processedVoiceStream || localRawStream;
+    if (activeAudio) {
+      activeAudio.getAudioTracks().forEach(track => {
+        if (!pc.getSenders().some(s => s.track && s.track.kind === 'audio')) {
+          pc.addTrack(track, activeAudio);
+        }
+      });
+    }
+    if (isCameraActive && localVideoStream) {
+      localVideoStream.getVideoTracks().forEach(track => {
+        if (!pc.getSenders().some(s => s.track && s.track.kind === 'video')) {
+          pc.addTrack(track, localVideoStream);
+        }
+      });
+    }
+    if (isScreenShareActive && localScreenStream) {
+      localScreenStream.getVideoTracks().forEach(track => {
+        if (!pc.getSenders().some(s => s.track && s.track.kind === 'video')) {
+          pc.addTrack(track, localScreenStream);
+        }
+      });
     }
 
     pc.onicecandidate = (event) => {
@@ -1858,10 +1880,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
 
-    socket.emit('webrtc_answer', {
-      targetSocketId: senderSocketId,
-      sdpAnswer: answer
-    });
+    if (socket) {
+      socket.emit('webrtc_answer', {
+        targetSocketId: senderSocketId,
+        sdpAnswer: answer
+      });
+    }
   }
 
   async function handleWebRTCAnswer(senderSocketId, sdpAnswer) {
