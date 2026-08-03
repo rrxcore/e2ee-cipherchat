@@ -119,14 +119,29 @@ function addCloudMessage(roomCode, payload) {
 io.on('connection', (socket) => {
   console.log(`[Socket Connected] ID: ${socket.id}`);
 
-  // Join Room with Password & Telegram Fast Cloud Messaging Recovery
+  // Join Room with Strict Password Verification & Telegram Fast Cloud Messaging Recovery
   socket.on('join_room', ({ roomCode, username, publicKey, roomPassword }) => {
-    if (roomPassword) {
-      roomPasswords.set(roomCode, roomPassword);
-      saveCloudDb();
+    const cleanRoom = (roomCode || 'rrxcore-1').trim();
+    const cleanUser = (username || `User_${socket.id.substring(0, 4)}`).trim();
+    const pass = (roomPassword || '').trim();
+
+    if (roomPasswords.has(cleanRoom)) {
+      const storedPass = roomPasswords.get(cleanRoom);
+      if (storedPass && storedPass !== pass) {
+        console.log(`[Room Access Denied] User '${cleanUser}' entered incorrect password for '${cleanRoom}'`);
+        return socket.emit('room_error', {
+          message: `Incorrect room password for '${cleanRoom}'. Both users must use the EXACT same password to join.`
+        });
+      }
+    } else {
+      if (pass) {
+        roomPasswords.set(cleanRoom, pass);
+        saveCloudDb();
+        console.log(`[Room Created with Password] Room '${cleanRoom}' protected with password '${pass}'`);
+      }
     }
 
-    socket.join(roomCode);
+    socket.join(cleanRoom);
     ensureDefaultVoiceChannels(roomCode);
 
     if (!rooms.has(roomCode)) {
