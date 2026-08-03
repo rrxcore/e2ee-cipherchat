@@ -821,13 +821,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (e) {}
   }
 
+  function hideJoinOverlayAndShowChat() {
+    if (roomJoinOverlay) {
+      roomJoinOverlay.classList.add('hidden');
+      roomJoinOverlay.style.display = 'none';
+    }
+    if (singleChatView) {
+      singleChatView.style.display = 'flex';
+      singleChatView.style.opacity = '1';
+      singleChatView.style.visibility = 'visible';
+    }
+  }
+
   bypassJoinBtn?.addEventListener('click', () => {
     myUsername = usernameInput.value.trim() || 'User_' + Math.floor(Math.random() * 1000);
     myRoomCode = roomCodeInput.value.trim() || 'rrxcore-1';
     myRoomPassword = roomPasswordInput.value.trim();
     saveUserCredentials();
 
-    roomJoinOverlay.style.display = 'none';
+    hideJoinOverlayAndShowChat();
     currentRoomLabel.textContent = `Room: ${myRoomCode}`;
     addSystemMessage(`✨ Entered room '${myRoomCode}' as ${myUsername}.`);
 
@@ -853,11 +865,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       initSocket(customUrl);
     }
 
-    joinErrorMessage.style.display = 'block';
-    joinErrorMessage.textContent = '⏳ Verifying room password & connecting to server...';
-    joinErrorMessage.style.background = 'rgba(0, 122, 255, 0.2)';
-    joinErrorMessage.style.color = 'var(--ios-cyan)';
-    joinErrorMessage.style.border = '1px solid rgba(0, 122, 255, 0.4)';
+    hideJoinOverlayAndShowChat();
+    currentRoomLabel.textContent = `Room: ${myRoomCode}`;
+    addSystemMessage(`✨ Joining server '${myRoomCode}' as ${myUsername}...`);
 
     if (socket && isConnectedToServer) {
       socket.emit('join_room', {
@@ -867,15 +877,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         roomPassword: myRoomPassword
       });
     }
-
-    // Safety fallback for slow cloud server spin-up
-    setTimeout(() => {
-      if (roomJoinOverlay.style.display !== 'none' && !isConnectedToServer) {
-        roomJoinOverlay.style.display = 'none';
-        currentRoomLabel.textContent = `Room: ${myRoomCode}`;
-        addSystemMessage(`ℹ️ Entered room '${myRoomCode}' (Cloud backend waking up in background).`);
-      }
-    }, 6000);
   });
 
   // --- TELEGRAM FAST CLOUD MESSAGING RECOVERY ENGINE ---
@@ -931,7 +932,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!socket) return;
 
     socket.on('room_error', ({ message }) => {
-      roomJoinOverlay.style.display = 'flex';
+      if (roomJoinOverlay) {
+        roomJoinOverlay.classList.remove('hidden');
+        roomJoinOverlay.style.display = 'flex';
+      }
       joinErrorMessage.textContent = `❌ ${message}`;
       joinErrorMessage.style.display = 'block';
       joinErrorMessage.style.background = 'rgba(255, 45, 85, 0.2)';
@@ -940,7 +944,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     socket.on('room_joined', async ({ roomCode, mySession, peers, recentPackets, isPasswordProtected, voiceChannels, cloudHistory }) => {
-      roomJoinOverlay.style.display = 'none';
+      hideJoinOverlayAndShowChat();
       currentRoomLabel.textContent = `Room: ${myRoomCode}`;
 
       const protectionStatus = isPasswordProtected ? '🔒 Password Protected' : '🌐 Public';

@@ -302,6 +302,14 @@ body {
   align-items: center;
   justify-content: center;
   padding: 20px;
+  transition: opacity 0.25s ease;
+}
+
+.room-join-overlay.hidden {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
 }
 
 .join-card {
@@ -1556,7 +1564,7 @@ body {
     display: inline-flex;
   }
 
-  .chat-app-container {
+  .app-container {
     flex-direction: column;
     padding: 0;
     margin: 0;
