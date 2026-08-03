@@ -313,6 +313,17 @@ io.on('connection', (socket) => {
     });
   });
 
+  // Relay WebRTC Stream Stopped (Camera / Screen Share OFF)
+  socket.on('webrtc_stream_stopped', ({ streamType }) => {
+    const roomCode = socket.roomCode;
+    if (roomCode) {
+      socket.to(roomCode).emit('webrtc_stream_stopped', {
+        senderSocketId: socket.id,
+        streamType: streamType || 'video'
+      });
+    }
+  });
+
   // Voice Speaking State
   socket.on('voice_speaking_state', ({ isSpeaking }) => {
     const roomCode = socket.roomCode;
