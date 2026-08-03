@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CipherChat | rrxcore edition</title>
   <meta name="description" content="CipherChat rrxcore edition - Unified WhatsApp, Telegram & Discord Features with Web Crypto E2EE.">
-  <link rel="stylesheet" href="css/style.css?v=20260803v9">
+  <link rel="stylesheet" href="css/style.css?v=20260803v10">
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body data-theme="ios-dark">
@@ -199,7 +199,8 @@
               <button type="button" class="voice-icon-btn" id="voiceMuteBtn" title="Toggle Mute">🎤</button>
               <button type="button" class="voice-icon-btn" id="voiceDeafenBtn" title="Toggle Deafen">🎧</button>
               <button type="button" class="voice-icon-btn" id="voiceCameraBtn" title="Toggle WebRTC Video Camera">📹</button>
-              <button type="button" class="voice-icon-btn" id="voiceScreenShareBtn" title="Share Screen">🖥️</button>
+              <button type="button" class="voice-ctrl-btn" id="voiceCameraFlipBtn" title="Switch Camera" style="display: none;">🔄</button>
+              <button type="button" class="voice-ctrl-btn" id="voiceScreenShareBtn" title="Share Screen">📺</button>
               <button type="button" class="voice-icon-btn" id="openVoiceFXBtn" title="Voice Changer FX">🎭</button>
               <button type="button" class="voice-icon-btn disconnect-btn" id="voiceDisconnectBtn" title="Disconnect Voice">❌</button>
             </div>
@@ -245,27 +246,24 @@
 
           <!-- WebRTC Video & Screen Share Grid Bar with Expand & Shrink View Controls -->
           <div class="video-grid-wrapper" id="videoGridWrapper" style="display: none;">
+            <!-- Encoder Settings (Hidden by default, shown only when streaming) -->
+            <div id="encoderSettingsGroup" style="display: none; justify-content: flex-end; gap: 6px; padding: 6px 12px; background: rgba(0,0,0,0.4); margin-bottom: 8px; border-radius: 6px;">
+              <select id="videoQualitySelect" class="apple-select" style="font-size: 0.75rem; padding: 4px; min-width: 80px;">
+                <option value="high">4K/1080p60 High</option>
+                <option value="medium" selected>720p30 Med</option>
+                <option value="low">480p Low</option>
+              </select>
+              <select id="videoBitrateSelect" class="apple-select" style="font-size: 0.75rem; padding: 4px; min-width: 80px;">
+                <option value="30000">30 Mbps</option>
+                <option value="15000">15 Mbps</option>
+                <option value="8000">8 Mbps</option>
+                <option value="3000" selected>3 Mbps</option>
+                <option value="1000">1 Mbps</option>
+              </select>
+            </div>
             <div class="video-grid-header">
               <span style="font-size: 0.76rem; font-weight: 800; color: var(--ios-cyan);">📹 WebRTC Stream Grid</span>
               <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                <label for="videoQualitySelect" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">Quality:</label>
-                <select id="videoQualitySelect" class="apple-input" style="padding: 2px 6px; font-size: 0.72rem; width: 140px; background: rgba(0,0,0,0.6);">
-                  <option value="4k">✨ 4K @ 60 FPS</option>
-                  <option value="2k">💎 1440p @ 60 FPS</option>
-                  <option value="1080p" selected>🎬 1080p @ 60 FPS</option>
-                  <option value="720p">📱 720p @ 30 FPS</option>
-                </select>
-
-                <label for="videoBitrateSelect" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">Bitrate:</label>
-                <select id="videoBitrateSelect" class="apple-input" style="padding: 2px 6px; font-size: 0.72rem; width: 150px; background: rgba(0,0,0,0.6);">
-                  <option value="30000000">🚀 30 Mbps (Extreme)</option>
-                  <option value="25000000">⚡ 25 Mbps (Ultra)</option>
-                  <option value="20000000">🔥 20 Mbps (Super Clear)</option>
-                  <option value="16000000" selected>⚡ 16 Mbps (Default)</option>
-                  <option value="12000000">💎 12 Mbps (Standard)</option>
-                  <option value="8000000">🎬 8 Mbps (1080p)</option>
-                  <option value="4000000">📱 4 Mbps (Balanced)</option>
-                </select>
 
                 <!-- Shrink & Expand View Mode Buttons -->
                 <div class="view-mode-btn-group" style="display: flex; gap: 4px; margin-left: 4px;">
@@ -683,7 +681,7 @@
     </div>
   </div>
 
-  <script src="js/crypto.js?v=20260803v9"></script>
-  <script src="js/app.js?v=20260803v9"></script>
+  <script src="js/crypto.js?v=20260803v10"></script>
+  <script src="js/app.js?v=20260803v10"></script>
 </body>
 </html>

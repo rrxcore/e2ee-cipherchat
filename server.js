@@ -450,7 +450,7 @@ io.on('connection', (socket) => {
           socket.to(roomCode).emit('peer_left', { socketId: socket.id, username: user?.username });
         }
         console.log(`[Socket Disconnected Finalized] User '${user?.username}' left room '${roomCode}'`);
-      }, 10000);
+      }, 60000);
 
       pendingDisconnects.set(socket.id, timeoutId);
     }

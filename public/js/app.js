@@ -60,6 +60,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const peerList = document.getElementById('peerList');
   const messagesArea = document.getElementById('messagesArea');
   const chatForm = document.getElementById('chatForm');
+  let currentFacingMode = 'user'; // For mobile camera toggle
+
+  // Elements
   const messageInput = document.getElementById('messageInput');
   const fileInput = document.getElementById('fileInput');
 
@@ -841,10 +844,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     myRoomPassword = roomPasswordInput.value.trim();
     saveUserCredentials();
 
-    // Always open chat immediately — no waiting
+    // Always open chat immediately
     hideJoinOverlayAndShowChat();
     currentRoomLabel.textContent = `Room: ${myRoomCode}`;
     addSystemMessage(`✨ Joining room '${myRoomCode}' as ${myUsername}...`);
+    
+    // Play harmonic chime immediately upon user interaction to bypass autoplay restrictions
+    playRoomJoinChime();
 
     if (socket && isConnectedToServer) {
       socket.emit('join_room', {
@@ -979,8 +985,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     socket.on('peer_joined', async (peer) => {
-      playRoomJoinChime();
-      addSystemMessage(`👋 User '${peer.username}' joined the room.`);
+      addSystemMessage(`✨ User '${peer.username}' joined the room.`);
       socket.emit('share_public_key', {
         recipientSocketId: peer.socketId,
         publicKey: myPubKeyJwk
@@ -995,7 +1000,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const typingIndicatorBar = document.getElementById('typingIndicatorBar');
       const typingUserText = document.getElementById('typingUserText');
       if (typingUserText && typingIndicatorBar) {
-        typingUserText.textContent = `💬 ${username} is typing...`;
+        typingUserText.textContent = `✍️ ${username} is typing...`;
         typingIndicatorBar.style.display = 'flex';
       }
     });
@@ -1390,14 +1395,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function updateEncoderControlsVisibility() {
     const isBroadcasting = isCameraActive || isScreenShareActive;
-    const qualEl = document.getElementById('videoQualitySelect');
-    const bitrEl = document.getElementById('videoBitrateSelect');
-
-    if (qualEl && qualEl.closest('label')) {
-      qualEl.closest('label').style.display = isBroadcasting ? 'inline-flex' : 'none';
+    const encoderGroup = document.getElementById('encoderSettingsGroup');
+    const cameraFlipBtn = document.getElementById('voiceCameraFlipBtn');
+    
+    if (encoderGroup) {
+      encoderGroup.style.display = isBroadcasting ? 'flex' : 'none';
     }
-    if (bitrEl && bitrEl.closest('label')) {
-      bitrEl.closest('label').style.display = isBroadcasting ? 'inline-flex' : 'none';
+    
+    if (cameraFlipBtn) {
+      cameraFlipBtn.style.display = isCameraActive ? 'inline-block' : 'none';
     }
   }
 
@@ -1470,12 +1476,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         localVideoStream.getTracks().forEach(t => t.stop());
       }
 
-      // Smoothness-first camera constraints (60fps ideal target)
+      // Smoothness-first camera constraints but relaxed for mobile compatibility
       localVideoStream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: profile.width <= 1920 ? profile.width : 1920 },
           height: { ideal: profile.height <= 1080 ? profile.height : 1080 },
-          frameRate: { ideal: 60, min: 30 }
+          frameRate: { ideal: 30 },
+          facingMode: currentFacingMode
         },
         audio: false
       });
@@ -1577,6 +1584,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       updateEncoderControlsVisibility();
       addSystemMessage(`📹 WebRTC Camera Video stopped.`);
     }
+  });
+
+  const voiceCameraFlipBtn = document.getElementById('voiceCameraFlipBtn');
+  voiceCameraFlipBtn?.addEventListener('click', async () => {
+    if (!isCameraActive) return;
+    currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+    await startCameraStream();
+    addSystemMessage(`🔄 Camera switched to ${currentFacingMode} facing.`);
   });
 
   voiceScreenShareBtn?.addEventListener('click', async () => {
