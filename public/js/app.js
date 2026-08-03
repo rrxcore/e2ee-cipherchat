@@ -600,13 +600,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // --- TELEGRAM FAST CLOUD MESSAGING ACCURATE PERSISTENCE ENGINE ---
   function saveToLocalTelegramCloud(roomCode, username, item) {
+    if (!roomCode || !username || !item) return;
     try {
-      const key = `cipherchat_telegram_cloud_${roomCode}_${username}`;
+      const rCode = roomCode.toLowerCase().trim();
+      const uName = username.toLowerCase().trim();
+      const key = `cipherchat_telegram_cloud_${rCode}_${uName}`;
       const existingStr = localStorage.getItem(key);
       let items = existingStr ? JSON.parse(existingStr) : [];
       if (!items.some(x => x.id === item.id)) {
         items.push(item);
-        if (items.length > 300) items.shift();
+        if (items.length > 500) items.shift();
         localStorage.setItem(key, JSON.stringify(items));
       }
     } catch (e) {
@@ -615,22 +618,56 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function removeFromLocalTelegramCloud(roomCode, username, msgId) {
+    if (!roomCode || !username) return;
     try {
-      const key = `cipherchat_telegram_cloud_${roomCode}_${username}`;
-      const existingStr = localStorage.getItem(key);
-      if (existingStr) {
-        let items = JSON.parse(existingStr);
-        items = items.filter(x => x.id !== msgId);
-        localStorage.setItem(key, JSON.stringify(items));
-      }
+      const rCode = roomCode.toLowerCase().trim();
+      const uName = username.toLowerCase().trim();
+      const keys = [
+        `cipherchat_telegram_cloud_${rCode}_${uName}`,
+        `cipherchat_telegram_cloud_${roomCode}_${username}`,
+        `instanttransmissionchat_telegram_cloud_${rCode}_${uName}`,
+        `instanttransmissionchat_telegram_cloud_${roomCode}_${username}`
+      ];
+      keys.forEach(k => {
+        const existingStr = localStorage.getItem(k);
+        if (existingStr) {
+          try {
+            let items = JSON.parse(existingStr);
+            items = items.filter(x => x.id !== msgId);
+            localStorage.setItem(k, JSON.stringify(items));
+          } catch(err){}
+        }
+      });
     } catch (e) {}
   }
 
   function getLocalTelegramCloud(roomCode, username) {
+    if (!roomCode || !username) return [];
     try {
-      const key = `cipherchat_telegram_cloud_${roomCode}_${username}`;
-      const existingStr = localStorage.getItem(key);
-      return existingStr ? JSON.parse(existingStr) : [];
+      const rCode = roomCode.toLowerCase().trim();
+      const uName = username.toLowerCase().trim();
+      const keys = [
+        `cipherchat_telegram_cloud_${rCode}_${uName}`,
+        `cipherchat_telegram_cloud_${roomCode}_${username}`,
+        `instanttransmissionchat_telegram_cloud_${rCode}_${uName}`,
+        `instanttransmissionchat_telegram_cloud_${roomCode}_${username}`
+      ];
+      
+      const combinedMap = new Map();
+      keys.forEach(k => {
+        const existingStr = localStorage.getItem(k);
+        if (existingStr) {
+          try {
+            const items = JSON.parse(existingStr);
+            if (Array.isArray(items)) {
+              items.forEach(it => {
+                if (it && it.id) combinedMap.set(it.id, it);
+              });
+            }
+          } catch(err){}
+        }
+      });
+      return Array.from(combinedMap.values());
     } catch (e) {
       return [];
     }
@@ -880,8 +917,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const localCloudMessages = getLocalTelegramCloud(myRoomCode, myUsername);
     const combinedMap = new Map();
 
-    localCloudMessages.forEach(item => combinedMap.set(item.id, item));
-    (serverCloudMessages || []).forEach(item => combinedMap.set(item.id, item));
+    localCloudMessages.forEach(item => {
+      if (item && item.id) combinedMap.set(item.id, item);
+    });
+    (serverCloudMessages || []).forEach(item => {
+      if (item && item.id) combinedMap.set(item.id, item);
+    });
 
     const sortedHistory = Array.from(combinedMap.values()).sort((a, b) => (a.id > b.id ? 1 : -1));
 
@@ -890,7 +931,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     for (const msg of sortedHistory) {
       if (renderedMsgIdsSet.has(msg.id)) continue;
 
-      if (msg.senderUsername === myUsername) {
+      const isMyMessage = msg.senderUsername && myUsername && (msg.senderUsername.toLowerCase().trim() === myUsername.toLowerCase().trim());
+
+      if (isMyMessage) {
         if (msg.payloadType === 'file') {
           renderOutgoingFileMessage(msg.senderUsername, msg.fileName, msg.plaintextFallback || '#', msg.isImage, msg.timerSeconds, msg.id);
         } else if (msg.payloadType === 'voice') {
@@ -920,7 +963,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (restoredCount > 0) {
-      addSystemMessage(`☁️ Telegram Fast Cloud Messaging: Restored ${restoredCount} messages for '${myUsername}' in '${myRoomCode}'!`);
+      addSystemMessage(`☁️ Telegram Cloud Recovery: Restored ${restoredCount} messages for '${myUsername}' in '${myRoomCode}'!`);
     }
   }
 
